@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tangub City Global College</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        .bg-primary{
+            background:#20673A;
+        }
+
+        .bg-secondary{
+            background:#027F3B;
+        }
+
+        .text-primary{
+            color:#20673A;
+        }
+
+        .text-secondary{
+            color:#027F3B;
+        }
+
+        .bg-accent{
+            background:#FFA808;
+        }
+
+        .text-accent{
+            color:#FFA808;
+        }
+
+        body{
+            background:#f4f7f5;
+        }
+    </style>
+
+</head>
+
+<body class="min-h-screen flex items-center justify-center p-6">
+
+<div class="w-full max-w-7xl bg-white rounded-3xl shadow-2xl overflow-hidden">
+
+    <div class="grid lg:grid-cols-2">
+
+        <!-- LEFT -->
+        <div class="relative hidden lg:flex">
+
+            <img
+                src="assets/login-art.webp"
+                class="w-full h-full object-cover"
+            >
+
+            <div class="absolute bottom-10 left-10">
+
+                <h1 class="text-white text-5xl font-bold leading-tight">
+                    Tangub City<br>
+                    Global College
+                </h1>
+
+                <p class="mt-5 text-white/90 text-lg">
+                    Empowering minds.<br>
+                    <span class="text-yellow-300 font-semibold">
+                        Transforming futures.
+                    </span>
+                </p>
+
+            </div>
+
+        </div>
+
+        <!-- RIGHT -->
+        <div class="flex items-center justify-center px-8 py-16">
+
+            <div class="w-full max-w-md">
+
+                <!-- Mobile Logo -->
+                <div class="lg:hidden flex justify-center mb-10">
+
+                    <img
+                        src="assets/logo.png"
+                        class="w-28"
+                    >
+
+                </div>
+
+                <h2 class="text-5xl font-bold text-primary">
+                    Welcome Back!
+                </h2>
+
+                <div class="w-20 h-1 bg-accent rounded-full mt-4 mb-8"></div>
+
+                <p class="text-gray-500 mb-10">
+                    Login to your account to continue your journey with us.
+                </p>
+
+                <!-- EMAIL -->
+
+                <div class="mb-5">
+
+                    <label class="text-sm font-semibold text-gray-700">
+                        Email Address
+                    </label>
+
+                    <input
+                        type="email"
+                        placeholder="Enter your email"
+                        class="mt-2 w-full rounded-xl border border-gray-300 px-5 py-4 outline-none focus:ring-2 focus:ring-green-700 transition"
+                    >
+
+                </div>
+
+                <!-- PASSWORD -->
+
+                <div class="mb-2">
+
+                    <label class="text-sm font-semibold text-gray-700">
+                        Password
+                    </label>
+
+                    <input
+                        type="password"
+                        placeholder="Enter your password"
+                        class="mt-2 w-full rounded-xl border border-gray-300 px-5 py-4 outline-none focus:ring-2 focus:ring-green-700 transition"
+                    >
+
+                </div>
+
+                <div class="flex justify-end mb-8">
+
+                    <a href="#" class="text-secondary hover:underline text-sm">
+                        Forgot Password?
+                    </a>
+
+                </div>
+
+                <button
+                    class="w-full rounded-xl bg-primary hover:bg-secondary text-white py-4 font-semibold transition duration-300"
+                >
+                    Login
+                </button>
+
+                <!-- Divider -->
+
+                <div class="flex items-center gap-4 my-8">
+
+                    <hr class="flex-1">
+
+                    <span class="text-gray-500 text-sm">
+                        or continue with
+                    </span>
+
+                    <hr class="flex-1">
+
+                </div>
+
+                <button
+                    class="w-full border rounded-xl py-4 hover:bg-gray-50 transition flex justify-center gap-3 items-center"
+                >
+
+                    <svg width="22" height="22" viewBox="0 0 48 48">
+                        <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12S17.4 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/>
+                        <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15 18.9 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34.1 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+                        <path fill="#4CAF50" d="M24 44c5.2 0 10-2 13.6-5.2l-6.3-5.3C29.2 35.1 26.7 36 24 36c-5.3 0-9.7-3.3-11.3-8l-6.6 5.1C9.5 39.6 16.2 44 24 44z"/>
+                        <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1.1 3.2-3.4 5.8-6.4 7.5l6.3 5.3C39.2 37.2 44 31.2 44 24c0-1.3-.1-2.4-.4-3.5z"/>
+                    </svg>
+
+                    Sign in with Google
+
+                </button>
+
+                <p class="text-center mt-8 text-gray-500">
+
+                    Don't have an account?
+
+                    <a href="#" class="text-secondary font-semibold hover:underline">
+                        Register here
+                    </a>
+
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>

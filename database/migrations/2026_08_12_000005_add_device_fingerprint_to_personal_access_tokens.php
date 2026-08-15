@@ -1,0 +1,27 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Add the device fingerprint to API tokens so a binding transfer (or a new
+     * device login) can invalidate the previous device's session, keeping the
+     * account bound to one active session at a time.
+     */
+    public function up(): void
+    {
+        Schema::table('personal_access_tokens', function (Blueprint $table) {
+            $table->string('device_fingerprint')->nullable()->after('token')->index();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::table('personal_access_tokens', function (Blueprint $table) {
+            $table->dropColumn('device_fingerprint');
+        });
+    }
+};
