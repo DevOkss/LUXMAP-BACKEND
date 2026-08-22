@@ -1,0 +1,53 @@
+name: deploy-production
+
+# Deploys to the Hostinger VPS after the `tests` workflow passes on main.
+# Can also be triggered manually from the Actions tab (workflow_dispatch).
+#
+# Required repository secrets:
+#   DEPLOY_SSH_KEY — private OpenSSH key authorized on the VPS
+#   DEPLOY_HOST    — e.g. 76.13.220.161
+#   DEPLOY_USER    — e.g. root (or a dedicated deploy user)
+
+on:
+  workflow_run:
+    workflows: [tests]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Only deploy when tests succeeded (or on manual dispatch).
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Prepare SSH key
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Pin host key
+        env:
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy to VPS
+        env:
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" \
+            'cd /var/www/soms && bash deploy/deploy.sh'

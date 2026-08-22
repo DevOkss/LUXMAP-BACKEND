@@ -144,6 +144,42 @@ Add:
 cd /var/www/soms && ./deploy.sh
 ```
 
+Or just push to `main` — CI/CD handles it (see below).
+
+---
+
+## CI/CD — automatic deploy on push to `main`
+
+The repo ships `.github/workflows/deploy.yml`: after the `tests` workflow
+passes on `main`, it SSHes into this VPS and runs `deploy/deploy.sh`.
+Manual runs are also possible from the GitHub Actions tab
+(**deploy-production → Run workflow**).
+
+One-time setup:
+
+1. **Authorize a key for GitHub Actions on the VPS** — generate one with
+   `ssh-keygen -t ed25519 -f github_actions_deploy -N ""` and append the
+   public key to `/root/.ssh/authorized_keys`:
+   ```bash
+   echo 'ssh-ed25519 <...> github-actions-luxmap-deploy' >> /root/.ssh/authorized_keys
+   ```
+2. **Add three repository secrets** (GitHub → Settings → Secrets and
+   variables → Actions):
+   | Secret | Value |
+   |---|---|
+   | `DEPLOY_SSH_KEY` | full contents of the **private** key (`github_actions_deploy`) |
+   | `DEPLOY_HOST` | `76.13.220.161` |
+   | `DEPLOY_USER` | `root` |
+
+Flow: push to `main` → tests run (PHP 8.3, Pest) → if green, VPS pulls code,
+rebuilds assets, migrates, and reloads PHP-FPM.
+
+> Note: the VPS must be able to read the repo for `git pull`. If the GitHub
+> repo is private, add a read-only **deploy key** (another ed25519 pair's
+> *public* half) in GitHub → repo → Settings → Deploy keys.
+
+---
+
 ## Troubleshooting
 
 - **500 errors**: `tail -f /var/www/soms/storage/logs/laravel.log`
