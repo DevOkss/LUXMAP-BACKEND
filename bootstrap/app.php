@@ -18,6 +18,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // The app is served behind a reverse proxy (labsync's Docker nginx
+        // terminates TLS and forwards to the host), so trust X-Forwarded-*
+        // headers to keep https URLs, secure cookies, and correct client IPs.
+        $middleware->trustProxies(at: '*');
+
         $middleware->web(append: [
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
