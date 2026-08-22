@@ -219,7 +219,7 @@
                 </div>
                 <div class="hero-phones">
                     <div class="phone">
-                        <img src="/storage/images/dashboard.png" alt="LuxMap dashboard preview" loading="lazy">
+                        <img src="/images/dashboard.png" alt="LuxMap dashboard preview" loading="lazy">
                     </div>
                 </div>
             </div>

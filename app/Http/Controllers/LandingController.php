@@ -43,9 +43,9 @@ class LandingController extends Controller
                 ['title' => 'Sign in & go', 'description' => 'Log in once, and LuxMap is ready — attendance and payments at your fingertips.'],
             ],
             'screens' => [
-                ['src' => '/storage/images/dashboard.png', 'alt' => 'LuxMap dashboard'],
-                ['src' => '/storage/images/fee-page.png', 'alt' => 'LuxMap fees & payments'],
-                ['src' => '/storage/images/dashboard-slant.png', 'alt' => 'LuxMap attendance'],
+                ['src' => '/images/dashboard.png', 'alt' => 'LuxMap dashboard'],
+                ['src' => '/images/fee-page.png', 'alt' => 'LuxMap fees & payments'],
+                ['src' => '/images/dashboard-slant.png', 'alt' => 'LuxMap attendance'],
             ],
         ]);
     }
