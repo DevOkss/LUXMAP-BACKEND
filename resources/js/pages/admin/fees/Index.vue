@@ -71,20 +71,6 @@ const statusColors: Record<string, string> = {
     posted: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
 };
 
-function ordinal(n: number): string {
-    if (n % 100 >= 11 && n % 100 <= 13) return 'th';
-    if (n % 10 === 1) return 'st';
-    if (n % 10 === 2) return 'nd';
-    if (n % 10 === 3) return 'rd';
-    return 'th';
-}
-
-function yearsLabel(years: string[] | null): string {
-    if (!years || years.includes('all')) return 'All Students';
-    const sorted = [...years].sort((a, b) => Number(a) - Number(b));
-    return `${sorted.map(y => `${y}${ordinal(Number(y))}`).join(', ')} Year`;
-}
-
 function typeLabel(type: string): string {
     const labels: Record<string, string> = {
         ssc: 'Student Council',

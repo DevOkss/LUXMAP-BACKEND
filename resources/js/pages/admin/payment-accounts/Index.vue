@@ -44,7 +44,6 @@ const form = useForm({
     is_active: true,
 });
 
-const selectedOrg = computed(() => props.organizations.find((o) => o.id === form.organization_id));
 const canManage = computed(() => props.can_manage);
 
 const previewUrl = ref<string | null>(null);

@@ -18,7 +18,7 @@ interface AcademicTermRow {
     enrollments_count: number
 }
 
-const props = defineProps<{
+defineProps<{
     terms: AcademicTermRow[]
 }>()
 
