@@ -37,7 +37,12 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          sed -i 's/\r$//' ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          # Fails loudly here (instead of falling back to password auth) if the
+          # secret is not a parseable private key.
+          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null \
+            && echo "deploy key parses OK"
 
       - name: Pin host key
         env:
@@ -53,5 +58,6 @@ jobs:
           SSH_HOST: ${{ secrets.DEPLOY_HOST || '76.13.220.161' }}
           SSH_USER: ${{ secrets.DEPLOY_USER || 'root' }}
         run: |
-          ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" \
+          ssh -o BatchMode=yes -o PasswordAuthentication=no \
+            -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" \
             'cd /var/www/soms && bash deploy/deploy.sh'
