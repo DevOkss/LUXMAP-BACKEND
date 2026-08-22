@@ -3,7 +3,7 @@
 use App\Models\FaceEnrollment;
 use App\Models\User;
 
-function faceDescriptors(int $count = 1): array
+function faceDescriptors(int $count = 3): array
 {
     $descriptors = [];
 
@@ -23,7 +23,7 @@ test('user can enroll face descriptors and sees them back', function () {
     $user = User::factory()->create();
 
     $this->actingAs($user)
-        ->postJson('/api/face/enroll', ['user_id' => $user->id, 'descriptors' => faceDescriptors(2)])
+        ->postJson('/api/face/enroll', ['user_id' => $user->id, 'descriptors' => faceDescriptors(3)])
         ->assertOk()
         ->assertJsonPath('enrolled', true);
 
@@ -32,7 +32,15 @@ test('user can enroll face descriptors and sees them back', function () {
     $this->actingAs($user)->getJson('/api/face/enrollment')
         ->assertOk()
         ->assertJsonPath('enrolled', true)
-        ->assertJsonCount(2, 'descriptors');
+        ->assertJsonCount(3, 'descriptors');
+});
+
+test('enrollment requires at least three descriptor samples', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->postJson('/api/face/enroll', ['descriptors' => faceDescriptors(2)])
+        ->assertStatus(422);
 });
 
 test('enrollment upserts instead of duplicating', function () {

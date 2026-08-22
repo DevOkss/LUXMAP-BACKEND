@@ -6,6 +6,10 @@
 
         <title inertia>{{ config('app.name', 'Laravel') }}</title>
 
+        <link rel="icon" type="image/x-icon" href="/storage/logos/luxmap.ico">
+        <link rel="icon" type="image/png" sizes="192x192" href="/storage/logos/luxmap.png">
+        <link rel="apple-touch-icon" href="/storage/logos/luxmap.png">
+
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
 

@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Install LuxMap on your phone or computer — your school organizations, attendance, and payments.">
     <title>{{ $appName }} — Install the App</title>
+    <link rel="icon" type="image/x-icon" href="/storage/logos/luxmap.ico">
+    <link rel="icon" type="image/png" sizes="192x192" href="/storage/logos/luxmap.png">
+    <link rel="apple-touch-icon" href="/storage/logos/luxmap.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -57,7 +60,7 @@
         }
         .hero::before { width: 320px; height: 320px; left: -120px; top: -80px; }
         .hero::after { width: 420px; height: 420px; right: -160px; bottom: -160px; }
-        .hero-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: center; position: relative; z-index: 1; }
+        .hero-grid { display: grid; grid-template-columns: 1fr 1.05fr; gap: 48px; align-items: center; position: relative; z-index: 1; }
         .badge {
             display: inline-flex; align-items: center; gap: 8px;
             background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25);
@@ -90,7 +93,7 @@
         .hero-meta b { display: block; font-size: 18px; color: #fff; }
         .hero-phones { display: flex; justify-content: center; align-items: center; position: relative; z-index: 1; }
         .phone {
-            width: min(320px, 100%);
+            width: min(460px, 100%);
             background: transparent;
             border-radius: 24px;
             overflow: hidden;

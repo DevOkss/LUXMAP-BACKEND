@@ -56,8 +56,17 @@ function openUnbind(row: BindingRow) {
 
 function confirmUnbind() {
     if (!target.value) return
-    router.delete(`/admin/device-bindings/${target.value.id}`, { reason: reason.value || null }, { preserveScroll: true })
-    target.value = null
+    router.delete(
+        `/admin/device-bindings/${target.value.id}`,
+        {
+            data: { reason: reason.value },
+            preserveScroll: true,
+            onSuccess: () => {
+                target.value = null
+                reason.value = ''
+            },
+        },
+    )
 }
 
 function shortFingerprint(fingerprint: string): string {

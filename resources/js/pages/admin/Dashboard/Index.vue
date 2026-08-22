@@ -103,11 +103,9 @@ const selectedTermOption = computed(() => props.terms.find((term) => term.id ===
 const selectedTermName = computed(() => selectedTermOption.value?.name ?? '');
 const currentTermName = computed(() => props.current_term?.name ?? 'No active academic term');
 
-const scopeLabel = computed(() => (props.scope_orgs.length ? props.scope_orgs.map((org) => org.code).join(' · ') : 'All organizations'));
-
 const pageSubtitle = computed(
     () =>
-        `Overview of collections, students, and officers ${selectedTermName.value ? `for ${selectedTermName.value}` : ''} across ${scopeLabel.value}.`,
+        `Overview of collections, students, and officers ${selectedTermName.value ? `for ${selectedTermName.value}` : ''}.`,
 );
 
 const currentTermRange = computed(() => {
@@ -213,10 +211,6 @@ const statusColors: Record<string, string> = {
                             <span class="size-1.5 rounded-full bg-emerald-300" />
                             Active
                         </span>
-                        <div class="text-right">
-                            <p class="text-xs font-medium uppercase tracking-wider text-primary-foreground/60">Scope</p>
-                            <p class="max-w-56 truncate text-sm font-semibold">{{ scopeLabel }}</p>
-                        </div>
                     </div>
                 </div>
             </section>

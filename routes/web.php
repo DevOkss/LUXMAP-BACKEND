@@ -20,6 +20,7 @@ use App\Http\Controllers\Admin\QrConfigurationController;
 use App\Http\Controllers\Admin\ShiftRequestController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\LandingController;
 use Illuminate\Support\Facades\Route;
 
 $adminRoles = 'super_admin,ssc_head,institute_head,sro_head,ssc_officer,isc_officer,sro_officer';
@@ -27,7 +28,7 @@ $adminRoles = 'super_admin,ssc_head,institute_head,sro_head,ssc_officer,isc_offi
 Route::get('/', fn () => redirect()->route('login'))->name('home');
 
 // Public landing page for installing the student PWA (not App Store/Play Store).
-Route::get('/app', [\App\Http\Controllers\LandingController::class, 'app'])
+Route::get('/app', [LandingController::class, 'app'])
     ->name('app.landing');
 
 Route::get('dashboard', [DashboardController::class, 'index'])
@@ -248,9 +249,6 @@ Route::middleware(['auth', 'verified', "role:{$adminRoles}"])->name('admin.')->p
         Route::delete('/device-bindings/{binding}', [DeviceBindingController::class, 'unbind'])
             ->name('device-bindings.unbind');
     });
-
-    Route::get('/dashboard', [DashboardController::class, 'index'])
-        ->name('dashboard');
 
 });
 

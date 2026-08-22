@@ -74,7 +74,6 @@ Route::name('api.')->group(function () {
         Route::post('/attendance/scan', [AttendanceController::class, 'scan'])->name('attendance.scan');
         Route::post('/attendance/sync', [AttendanceController::class, 'sync'])->name('attendance.sync');
         Route::get('/attendance/history', [AttendanceController::class, 'history'])->name('attendance.history');
-        Route::get('/attendance/event/{event}', [AttendanceController::class, 'eventAttendance'])->name('attendance.event');
         Route::get('/events/{event}/attendance/export', [AttendanceController::class, 'exportEvent'])->name('attendance.export');
 
         // Fees

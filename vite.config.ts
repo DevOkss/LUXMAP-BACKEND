@@ -30,4 +30,14 @@ export default defineConfig({
             plugins: [tailwindcss, autoprefixer],
         },
     },
+    // server: {
+    //     host: "0.0.0.0", // Allow Vite to listen on all network interfaces
+    //     port: 5174, // Or any available port
+    //     hmr: {
+    //         host: "192.168.254.116", // Replace with your local machine's IP address
+    //     },
+    //     headers: {
+    //         "Access-Control-Allow-Origin": "*",
+    //     },
+    // },
 });

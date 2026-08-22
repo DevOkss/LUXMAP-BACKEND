@@ -41,7 +41,7 @@ const current = props.status ? errorMap[props.status] : errorMap[404];
     <div class="flex min-h-svh flex-col items-center justify-center bg-muted p-6 md:p-10">
         <div class="flex w-full max-w-md flex-col items-center gap-8 text-center">
             <Link :href="route('home')" class="flex items-center gap-2 font-medium">
-                <img src="/logo.png" alt="" class="h-9 w-9 rounded-lg object-cover" />
+                <img src="/storage/logos/luxmap.png" alt="" class="h-9 w-9 rounded-lg object-cover" />
                 <span class="text-xl font-bold text-foreground">SOMS</span>
             </Link>
 

@@ -49,14 +49,32 @@ function openReview(row: ShiftRequestRow) {
 
 function confirmApprove() {
     if (!reviewing.value) return
-    router.patch(`/admin/shift-requests/${reviewing.value.id}/approve`, { remarks: remarks.value || null }, { preserveScroll: true })
-    reviewing.value = null
+    router.patch(
+        `/admin/shift-requests/${reviewing.value.id}/approve`,
+        {
+            data: { remarks: remarks.value || null },
+            preserveScroll: true,
+            onSuccess: () => {
+                reviewing.value = null
+                remarks.value = ''
+            },
+        },
+    )
 }
 
 function confirmReject() {
     if (!reviewing.value) return
-    router.patch(`/admin/shift-requests/${reviewing.value.id}/reject`, { remarks: remarks.value || null }, { preserveScroll: true })
-    reviewing.value = null
+    router.patch(
+        `/admin/shift-requests/${reviewing.value.id}/reject`,
+        {
+            data: { remarks: remarks.value || null },
+            preserveScroll: true,
+            onSuccess: () => {
+                reviewing.value = null
+                remarks.value = ''
+            },
+        },
+    )
 }
 
 const statusStyles: Record<ShiftRequestRow['status'], string> = {

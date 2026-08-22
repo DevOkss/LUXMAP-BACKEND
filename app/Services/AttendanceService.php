@@ -8,7 +8,6 @@ use App\Models\Organization;
 use App\Models\QrConfiguration;
 use App\Models\User;
 use App\Repositories\AttendanceRepository;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class AttendanceService
@@ -20,33 +19,21 @@ class AttendanceService
 
     public function scan(array $data, User $user): Attendance
     {
-        if (!isset($data['qr_configuration_id'])) {
-            $event = Event::find($data['event_id'] ?? 0);
-            if (!$event) {
-                throw ValidationException::withMessages(['event_id' => ['Event not found.']]);
-            }
-        } else {
-            $qrConfig = QrConfiguration::find($data['qr_configuration_id']);
-            if (!$qrConfig) {
-                throw ValidationException::withMessages(['qr_configuration_id' => ['QR configuration not found.']]);
-            }
+        $qrConfig = QrConfiguration::find($data['qr_configuration_id'] ?? 0);
+        if (! $qrConfig) {
+            throw ValidationException::withMessages(['qr_configuration_id' => ['QR configuration not found.']]);
         }
 
-        $existing = isset($qrConfig)
-            ? $this->repository->findByConfigurationAndUser($qrConfig->id, $user->id)
-            : $this->repository->findByEventAndUser($event->id, $user->id);
+        $existing = $this->repository->findByConfigurationAndUser($qrConfig->id, $user->id);
 
         if ($existing) {
             throw ValidationException::withMessages(['attendance' => ['You have already marked attendance for this session.']]);
         }
 
-        $eventId = $qrConfig?->event_id ?? $event->id ?? null;
-        $academicTermId = $eventId
-            ? Event::whereKey($eventId)->value('academic_term_id')
-            : null;
+        $academicTermId = Event::whereKey($qrConfig->event_id)->value('academic_term_id');
 
         return $this->repository->create([
-            'qr_configuration_id' => $data['qr_configuration_id'] ?? null,
+            'qr_configuration_id' => $qrConfig->id,
             'user_id' => $user->id,
             'academic_term_id' => $academicTermId,
             'scanned_at' => $data['scanned_at'] ?? now(),
@@ -88,7 +75,7 @@ class AttendanceService
         $configs = $event->qrConfigurations()->orderBy('id')->get();
 
         $attendances = Attendance::with(['user', 'qrConfiguration'])
-            ->whereHas('qrConfiguration', fn($q) => $q->where('event_id', $event->id))
+            ->whereHas('qrConfiguration', fn ($q) => $q->where('event_id', $event->id))
             ->get();
 
         $rows = [];
@@ -96,11 +83,11 @@ class AttendanceService
 
         foreach ($attendances as $attendance) {
             $user = $attendance->user;
-            if (!$user) {
+            if (! $user) {
                 continue;
             }
 
-            if (!isset($rows[$user->id])) {
+            if (! isset($rows[$user->id])) {
                 $rows[$user->id] = [
                     'student_number' => $user->student_number,
                     'name' => $user->name,
@@ -112,7 +99,7 @@ class AttendanceService
         }
 
         $rows = array_values($rows);
-        usort($rows, fn($a, $b) => strcmp($a['name'] ?? '', $b['name'] ?? ''));
+        usort($rows, fn ($a, $b) => strcmp($a['name'] ?? '', $b['name'] ?? ''));
 
         return [
             'event' => [
@@ -121,7 +108,7 @@ class AttendanceService
                 'time_from' => $event->time_from,
                 'time_to' => $event->time_to,
             ],
-            'qr_configs' => $configs->map(fn($c) => [
+            'qr_configs' => $configs->map(fn ($c) => [
                 'id' => $c->id,
                 'type' => $c->type,
                 'valid_from' => $c->valid_from,
@@ -135,17 +122,17 @@ class AttendanceService
     {
         $attendances = Attendance::with(['qrConfiguration.event.organization'])
             ->where('user_id', $user->id)
-            ->whereHas('event', fn($q) => $q->where('organization_id', $orgId))
+            ->whereHas('event', fn ($q) => $q->where('organization_id', $orgId))
             ->orderBy('scanned_at', 'desc')
             ->get()
-            ->filter(fn($a) => $a->qrConfiguration !== null);
+            ->filter(fn ($a) => $a->qrConfiguration !== null);
 
         return $attendances
-            ->groupBy(fn($a) => $a->qrConfiguration->event_id)
+            ->groupBy(fn ($a) => $a->qrConfiguration->event_id)
             ->map(function ($group) {
                 $event = $group->first()->qrConfiguration->event;
                 $totalQrConfigs = $event->qrConfigurations()->count();
-                $attendances = $group->map(fn($a) => [
+                $attendances = $group->map(fn ($a) => [
                     'id' => $a->id,
                     'qr_configuration_id' => $a->qr_configuration_id,
                     'type' => $a->qrConfiguration->type,
@@ -215,7 +202,7 @@ class AttendanceService
             foreach ($orgEventIds as $eventId) {
                 $eventQrCount = QrConfiguration::where('event_id', $eventId)->count();
                 $userScansForEvent = $attendances->filter(
-                    fn($a) => $a->qrConfiguration?->event_id === $eventId
+                    fn ($a) => $a->qrConfiguration?->event_id === $eventId
                 )->count();
 
                 if ($userScansForEvent > 0) {

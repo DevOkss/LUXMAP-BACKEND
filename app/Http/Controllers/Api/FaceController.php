@@ -17,7 +17,9 @@ class FaceController extends Controller
     {
         $data = $request->validate([
             'user_id' => ['sometimes', 'integer'],
-            'descriptors' => ['required', 'array', 'min:1', 'max:5'],
+            // A weak template (1-2 near-identical frames) raises both false
+            // accepts and false rejects — require a minimum of 3 samples.
+            'descriptors' => ['required', 'array', 'min:3', 'max:5'],
             'descriptors.*' => ['array', 'size:128'],
             'descriptors.*.*' => ['numeric'],
         ]);

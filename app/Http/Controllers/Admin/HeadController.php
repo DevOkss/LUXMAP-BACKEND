@@ -90,7 +90,6 @@ class HeadController extends Controller
             'password' => $validated['password'],
             'institute_id' => $institute?->id,
             'program_id' => $program?->id,
-            'is_active' => true,
         ]);
 
         $organization = $this->resolveOrganization($role, $institute, $program);
