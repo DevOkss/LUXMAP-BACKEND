@@ -1,6 +1,44 @@
 # SOMS — Laravel Admin Portal
 
-## Latest Session (August 10, 2026) — single active session + PWA install landing page + deploy readiness
+## Latest Session (August 22, 2026) — production launch on Hostinger VPS + security/cleanup pass
+
+> Backend work. The student PWA got matching changes (face verification hardening, verification persistence, env-config fallbacks fixing the Vercel 405) — see `PWA-SUMMARY.md`. **The system is now LIVE**: admin portal at `https://luxmap.devokss.online`, student PWA at `https://luxmap-topaz.vercel.app`.
+
+### Production deployment (Hostinger VPS, native LEMP behind a shared reverse proxy)
+- **Topology**: Internet → labsync project's **Docker nginx** (owns ports 80/443, terminates TLS for both domains) → host nginx serving SOMS on `127.0.0.1:8090`/`172.18.0.1:8090` → php8.3-fpm socket. A luxmap vhost was appended to `/opt/labsync/.docker/nginx/default.conf` proxying to the host (labsync itself untouched).
+- **Stack installed** on Ubuntu 24.04: nginx, MySQL 8 (`soms` db + least-privilege user), PHP 8.3-fpm + extensions (incl. gd/zip/xml/gmp for PhpSpreadsheet/DomPDF/WebPush), Node 20, Composer, certbot.
+- **HTTPS**: cert issued via certbot webroot through the existing labsync certbot volume (`certonly --webroot -w /opt/labsync/certbot/www -d luxmap.devokss.online`); certs copied into `/opt/labsync/certs/luxmap/` (mounted read-only into the container at `/etc/nginx/certs/luxmap/`). Renewal deploy hook `/etc/letsencrypt/renewal-hooks/deploy/luxmap-cert-sync.sh` recopies certs + reloads the container nginx.
+- **Scheduler cron** `/etc/cron.d/luxmap-scheduler`: `* * * * * www-data cd /var/www/soms && php artisan schedule:run` (drives the daily fee reminder). No queue worker needed — the app has zero queued jobs.
+- **Fresh install**: migrations + seeders run on the VPS (super admin `admin@soms.edu` / `admin123`; seeder data includes institutes/orgs/institution accounts/terms).
+- **Deployment artifacts** committed under `deploy/`: `env.production.example` (domain pre-filled, secret generation instructions), `nginx-soms.conf` (internal-port server block), `deploy.sh` (`--first-deploy` seeds; otherwise pull→composer→npm build→migrate→cache→FPM reload), `setup-vps.md` (full guide incl. CI/CD setup).
+- **Gotchas solved along the way** (documented here because they WILL recur):
+  - `.env` values containing `#` must be double-quoted (`DB_PASSWORD="..."`) or dotenv truncates them as comments.
+  - Editing a **single-file bind mount** (labsync's nginx conf) requires same-inode writes AND a container restart — `sed -i` replaces the inode so the container keeps seeing the old file.
+  - Container→host traffic is blocked by ufw by default; allowed via `ufw allow from 172.16.0.0/12 to any port 8090`.
+  - Static brand assets moved out of gitignored `public/storage/` into tracked `public/branding/` (favicons/logo) and `public/images/` (landing screenshots) — fresh clones would otherwise miss them.
+
+### CI/CD (GitHub Actions)
+- **`.github/workflows/deploy.yml`** (new): after the `tests` workflow passes on `main`, SSHes to the VPS and runs `deploy/deploy.sh`; also supports manual `workflow_dispatch`. Secrets: `DEPLOY_SSH_KEY` (required; validated with `ssh-keygen -y` before use), optional `DEPLOY_HOST`/`DEPLOY_USER` with hardcoded fallbacks. Password auth forbidden (`BatchMode=yes`), concurrency-grouped.
+- **`tests.yml`**: PHP pinned 8.3 to match production; pest output tee'd and dumped in annotations on failure.
+- **Linux CI fix**: Inertia's package default page path is `resources/js/Pages` (capital P) but this repo uses lowercase `pages` — invisible on Windows, broke every component assertion on Linux. New **`config/inertia.php`** pins `page_paths`/`testing.page_paths` to `resource_path('js/pages')`.
+- Lint failures fixed (unused vars in academic-terms/fees/payment-accounts pages). Suite green on ubuntu-latest: **318 passed (1437 assertions)**.
+
+### Face verification hardened (false-accept fix — another person could pass before)
+- Backend `FaceController::enroll` now requires **min:3 descriptor samples** (was min:1); new `Api\FaceTest` case locks it in.
+- Matching/threshold changes live in the PWA (see PWA-SUMMARY) — threshold tightened 0.55→0.45, consensus matching instead of best-sample, 3-sample enrollment template required.
+
+### Bug fixes & cleanup
+- **Attendances migration made idempotent** (`2026_08_02_135628`): drops are guarded by actual schema state (`getForeignKeys`/`getIndexes`/`hasColumn`) — the old in-closure try/catch never fires because Blueprint executes statements after the closure returns, which caused `1091 Can't DROP 'attendances_webauthn_credential_id_foreign'` and left the DB partially migrated. All 22 pending migrations then ran cleanly against production MySQL.
+- **Dead code removed**: `GpsValidationService`, `AttendanceStatus` enum, `AttendancePolicy` (never authorized against; read dropped columns), `QrCodeService` trimmed to the two used methods (`encryptPayload`, `generateQrSvg`) + its dead-method unit test deleted, unused `EventPolicy` import, unused frontend stores (`eventStore.ts`, `organizationStore.ts`), dead `'is_active' => true` in `HeadController::store`.
+- **Latent bugs fixed**: unreachable `event_id` fallback in `AttendanceService::scan()` that called undefined `findByEventAndUser()`; broken route `GET /api/attendance/event/{event}` (controller method never existed) removed; duplicate `/dashboard` route definition removed (kept `/dashboard`, which everything actually uses).
+- **Inertia data-passing bugs** (silent request failures): `admin/device-bindings/Index.vue` unbind passed `{ reason }` as the options object so the DELETE went out with no payload → silent 422, button "did nothing". Same misuse in `shift-requests/Index.vue` approve/reject silently dropped admin remarks. Both now send `data:` correctly and close dialogs onSuccess only.
+- **Reverse-proxy correctness**: `$middleware->trustProxies(at: '*')` in `bootstrap/app.php` — behind TLS-terminating proxies Laravel now sees https scheme/secure cookies properly.
+
+### Admin portal UI tweaks
+- Dashboard subtitle no longer enumerates all org codes ("across ICS-ISC · ..." removed); green Current-Term card shows only the **Active** badge (Scope block removed).
+- LuxMap branding: favicon (`luxmap.ico`) + apple-touch/png links in `app.blade.php` and the `/app` landing; logo swapped to `public/branding/luxmap.png` everywhere (`AppLogo`, auth card, error page, institutes fallback); `/app` hero mockup enlarged (320px → 460px, wider image column).
+
+## Previous Session (August 10, 2026) — single active session + PWA install landing page + deploy readiness
 
 > Backend + admin-portal work. The student PWA got matching changes (offline map fallback, install prompt, security-gate hardening) — see `PWA-SUMMARY.md`.
 
@@ -539,7 +577,6 @@ POST   /api/attendance/scan          — { qr_configuration_id, scanned_at } →
 POST   /api/attendance/sync          — { records: [{ qr_configuration_id, user_id, scanned_at }] } → dispatches ProcessAttendanceSync
 GET    /api/attendance/history       — ?organization_id=&per_page=&page=
 GET    /api/attendance/student-stats — per-org (SSC/ISC/SRO) attendance totals
-GET    /api/attendance/event/{event} — ⚠️ REGISTERED BUT BROKEN (controller method eventAttendance() undefined)
 ```
 
 ### Device Binding (Api\DeviceController — auth + `X-Device-Fingerprint` header)
@@ -658,7 +695,7 @@ const officerModules = modules.filter(m =>
 
 ## 8. Testing
 - Framework: Pest
-- Test count: 307 tests, 1263 assertions (Aug 9 — incl. 25 new device/face tests: `Api\FaceTest`, `Api\DeviceTest`, `Admin\DeviceBindingTest`)
+- Test count: 318 tests, 1437 assertions (Aug 22 — face-enrollment min-samples validation added; dead QrCodeService unit test removed with its code; suite also verified green on Ubuntu/PHP 8.3 via CI)
 - Test files: `Feature/Api/{Auth,LoginFlow,InstitutionAuth,Event,Attendance,Fee,Payment,Penalty,Notification,Organization,Report,Face,Device}Test`, `Feature/Admin/{AdminUsers,AdminHeads,AdminOfficers,AdminAdvisers,AdminInstitutes,DeviceBinding,Payments,Fees,Events}Test`, `Feature/Auth/{OfficerAuthentication,AdminAuthentication,RoleMiddleware,EmailVerification,PasswordConfirmation}Test`, `Feature/Settings/*`, `Unit/Services/{AccessScopeService,AttendanceService,QrCodeService,WorkspaceService,PermissionRegistry}Test`
 - **Caveat**: `phpunit.xml` runs SQLite `:memory:` while `.env` uses MySQL. The attendances migration (`2026_08_02_135628`) only drops the old columns on MySQL — on SQLite the old columns remain, so test writes using `event_id` pass locally but the column doesn't exist in production MySQL.
 
@@ -706,18 +743,20 @@ const officerModules = modules.filter(m =>
 
 ## 10. Known Dead Code & Bugs
 
+> **Aug 22, 2026**: every item in this table has been resolved — see "Bug fixes & cleanup" in the Latest Session. Table kept for historical reference.
+
 | Item | Location | Status |
 |---|---|---|
-| `GpsValidationService` | `app/Services/GpsValidationService.php` | Dead — no callers anywhere in `app/` |
-| `AttendanceStatus` enum | `app/Enums/AttendanceStatus.php` | Dead — no references |
-| `AttendanceRepository::findByEventAndUser()` | called from `AttendanceService.php:37` | **Undefined method** — would throw if the `event_id` fallback path is exercised (currently unreachable via HTTP since `AttendanceRequest` requires `qr_configuration_id`) |
-| `AttendancePolicy::manageable()` | `app/Policies/AttendancePolicy.php:31` | Reads `$attendance->organization_id` — column dropped from attendances |
-| `QrCodeService::generatePayload()` | `app/Services/QrCodeService.php:52` | References dropped `events.attendance_end` (returns null → falls back to `now()->addDay()`) |
-| Dead `EventPolicy` import | `app/Providers/AppServiceProvider.php:15` | Imported but no such class; registered policy is `SomEventPolicy` |
-| `QR_ENCRYPTION_KEY` missing from `.env.example` | `.env.example` | Setup gap — fresh installs get no QR key and `hex2bin()` of base64 `APP_KEY` produces garbage |
-| Stale admin Events pages | `resources/js/Pages/admin/events/Show.vue` | Renders dropped columns (`type`, `latitude`, `longitude`, `geofence_radius`, `max_participants`, `attendance_start/end`) |
-| Event detail links use numeric id | admin frontend | `getRouteKeyName()` = `uuid`, but links build `/admin/events/{event.id}` → broken navigation (should use `event.uuid`) |
-| Dead admin stores | `resources/js/stores/eventStore.ts`, `organizationStore.ts` | Unused; `organizationStore` hits non-existent `/admin/organizations` routes |
-| `/dashboard` registered twice | `routes/web.php:10` + `:114` | Duplicate named route (same controller) |
-| `HeadController::store()` passes `is_active` | `app/Http/Controllers/Admin/HeadController.php` | Column dropped from users (harmless — not in `$fillable`) |
-| Broken attendance route | `routes/api.php:55` | `GET /api/attendance/event/{event}` → undefined `AttendanceController@eventAttendance` |
+| ~~`GpsValidationService`~~ | `app/Services/GpsValidationService.php` | ✅ Deleted (Aug 22) |
+| ~~`AttendanceStatus` enum~~ | `app/Enums/AttendanceStatus.php` | ✅ Deleted (Aug 22) |
+| ~~`AttendanceRepository::findByEventAndUser()`~~ | called from `AttendanceService.php:37` | ✅ Fixed — unreachable `event_id` fallback branch removed from `scan()` |
+| ~~`AttendancePolicy::manageable()`~~ | `app/Policies/AttendancePolicy.php:31` | ✅ Policy deleted + Gate registration removed |
+| ~~`QrCodeService::generatePayload()`~~ | `app/Services/QrCodeService.php:52` | ✅ Fixed — all dead methods removed; only `encryptPayload()` + `generateQrSvg()` remain |
+| ~~Dead `EventPolicy` import~~ | `app/Providers/AppServiceProvider.php:15` | ✅ Removed |
+| ~~`QR_ENCRYPTION_KEY` missing from `.env.example`~~ | `.env.example` | ✅ Added with generation note |
+| ~~Stale admin Events pages~~ | `resources/js/Pages/admin/events/Show.vue` | ✅ Already resolved pre-Aug-22 (pages use `event.uuid`; no dropped columns rendered) |
+| ~~Event detail links use numeric id~~ | admin frontend | ✅ Already resolved pre-Aug-22 (all links use `event.uuid`) |
+| ~~Dead admin stores~~ | `resources/js/stores/eventStore.ts`, `organizationStore.ts` | ✅ Deleted (Aug 22) |
+| ~~`/dashboard` registered twice~~ | `routes/web.php:10` + `:114` | ✅ Fixed — duplicate admin-group definition removed; `/dashboard` kept |
+| ~~`HeadController::store()` passes `is_active`~~ | `app/Http/Controllers/Admin/HeadController.php` | ✅ Removed |
+| ~~Broken attendance route~~ | `routes/api.php` `GET /api/attendance/event/{event}` | ✅ Route removed (controller method never existed) |
