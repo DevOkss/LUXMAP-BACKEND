@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Install LuxMap on your phone or computer — your school organizations, attendance, and payments.">
     <title>{{ $appName }} — Install the App</title>
-    <link rel="icon" type="image/x-icon" href="/storage/logos/luxmap.ico">
-    <link rel="icon" type="image/png" sizes="192x192" href="/storage/logos/luxmap.png">
-    <link rel="apple-touch-icon" href="/storage/logos/luxmap.png">
+    <link rel="icon" type="image/x-icon" href="/branding/luxmap.ico">
+    <link rel="icon" type="image/png" sizes="192x192" href="/branding/luxmap.png">
+    <link rel="apple-touch-icon" href="/branding/luxmap.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">

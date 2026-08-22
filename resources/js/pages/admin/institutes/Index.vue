@@ -25,7 +25,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Institute and Programs', href: '/admin/institutes' },
 ]
 
-const logoFallback = '/storage/logos/luxmap.png'
+const logoFallback = '/branding/luxmap.png'
 </script>
 
 <template>

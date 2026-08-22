@@ -12,7 +12,7 @@ defineProps<{
     <div class="flex min-h-svh flex-col items-center justify-center gap-6 bg-muted p-6 md:p-10">
         <div class="flex w-full max-w-md flex-col gap-6">
             <Link :href="route('home')" class="flex items-center gap-2 self-center font-medium">
-                <img src="/storage/logos/luxmap.png" alt="" class="h-9 w-9 rounded-lg object-cover" />
+                <img src="/branding/luxmap.png" alt="" class="h-9 w-9 rounded-lg object-cover" />
                 <span class="text-xl font-bold text-foreground">SOMS</span>
             </Link>
 
