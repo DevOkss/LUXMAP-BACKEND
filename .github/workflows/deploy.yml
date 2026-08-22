@@ -5,8 +5,10 @@ name: deploy-production
 #
 # Required repository secrets:
 #   DEPLOY_SSH_KEY — private OpenSSH key authorized on the VPS
-#   DEPLOY_HOST    — e.g. 76.13.220.161
-#   DEPLOY_USER    — e.g. root (or a dedicated deploy user)
+#
+# Optional repository variables/secrets (defaults shown):
+#   DEPLOY_HOST — 76.13.220.161
+#   DEPLOY_USER — root
 
 on:
   workflow_run:
@@ -39,15 +41,17 @@ jobs:
 
       - name: Pin host key
         env:
-          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_HOST: ${{ secrets.DEPLOY_HOST || '76.13.220.161' }}
         run: |
+          echo "Deploying to host: $SSH_HOST"
           mkdir -p ~/.ssh
-          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          if [ -z "$SSH_HOST" ]; then echo "DEPLOY_HOST is empty"; exit 1; fi
+          ssh-keyscan -T 15 -H "$SSH_HOST" >> ~/.ssh/known_hosts
 
       - name: Deploy to VPS
         env:
-          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
-          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          SSH_HOST: ${{ secrets.DEPLOY_HOST || '76.13.220.161' }}
+          SSH_USER: ${{ secrets.DEPLOY_USER || 'root' }}
         run: |
           ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" \
             'cd /var/www/soms && bash deploy/deploy.sh'
