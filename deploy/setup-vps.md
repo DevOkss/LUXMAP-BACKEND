@@ -2,6 +2,11 @@
 
 Target: fresh Ubuntu VPS at `76.13.220.161`, app served at **https://luxmap.devokss.online**.
 
+> ⚠️ On the CURRENT production box, SOMS shares the VPS with two other apps and
+> is NOT standalone: TLS + public ports belong to the LabSync Docker nginx
+> proxy. Read `DEPLOYMENT.md` (repo root) before touching anything, and never
+> run `certbot --nginx` here — see section 7.
+
 > Run every command as root (or with sudo) unless noted. The deploy user in the
 > examples is `deploy` — adjust if you use another.
 
@@ -103,20 +108,30 @@ config, and reloads PHP-FPM.
 
 ## 7. Nginx + HTTPS
 
+This box's nginx only listens on internal ports — the LabSync Docker proxy
+owns public 80/443 (see `DEPLOYMENT.md`). **Do NOT run `certbot --nginx`.**
+
 ```bash
 cp /var/www/soms/deploy/nginx-soms.conf /etc/nginx/sites-available/soms
 ln -sf /etc/nginx/sites-available/soms /etc/nginx/sites-enabled/soms
-rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
-# Point the DNS A record of luxmap.devokss.online -> 76.13.220.161 first!
-certbot --nginx -d luxmap.devokss.online
+# ufw: let the Docker network reach the internal port
+ufw allow from 172.16.0.0/12 to any port 8090
+
+# Public vhost (proxy side): copy deploy/proxy/20-luxmap.conf to
+# /opt/labsync/.docker/nginx/conf.d/20-luxmap.conf, then:
+docker exec labsync-web-1 nginx -t && docker exec labsync-web-1 nginx -s reload
 ```
 
-Certbot rewrites the config for HTTPS + auto-renewal.
+Certificate (DNS A record `luxmap.devokss.online` → `76.13.220.161` must exist):
 
-Point DNS A record for `luxmap.devokss.online` to `76.13.220.161` **before**
-running certbot.
+```bash
+certbot certonly --webroot -w /opt/labsync/certbot/www -d luxmap.devokss.online \
+  --non-interactive --agree-tos -m your@email.com
+# sync into the proxy + install renewal hook (see AVILA/labsync repo):
+cd /opt/labsync && bash scripts/install-renewal-hook.sh
+```
 
 ## 8. Scheduler cron (fee-due reminders, daily 08:00)
 

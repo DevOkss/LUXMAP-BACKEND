@@ -36,6 +36,20 @@ class WebPushService
             return;
         }
 
+        try {
+            $this->dispatch($subscriptions, $title, $body, $data);
+        } catch (\Throwable $e) {
+            // Push is best-effort: never let it fail the business action
+            // (payment verify, device binding, ...) that triggered it.
+            Log::error('Web push delivery crashed', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function dispatch($subscriptions, string $title, string $body, array $data): void
+    {
         $webPush = $this->webPush();
         $payload = json_encode([
             'title' => $title,

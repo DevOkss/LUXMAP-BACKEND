@@ -1,6 +1,25 @@
 # SOMS — Laravel Admin Portal
 
-## Latest Session (August 22, 2026) — production launch on Hostinger VPS + security/cleanup pass
+## Latest Session (September 5, 2026) — production infra rescue: TLS vhost restored, shared-VPS cookie fix, per-project proxy configs
+
+> No app-code changes — this was all deployment infrastructure on the shared VPS (`76.13.220.161`), which hosts **three** Laravel projects behind one Docker nginx proxy: labsync (`AVILA/labsync`), hulagway (`SABACAHAN/hulagway-backend`), and LuxMap/SOMS here, plus the student PWA on Vercel. New **`DEPLOYMENT.md`** (repo root) is the orientation doc; runbook fixes in `deploy/setup-vps.md`.
+
+### Incident 1 — `ERR_CERT_COMMON_NAME_INVALID` on luxmap.devokss.online
+- **Cause**: the public proxy config (labsync's Docker nginx `default.conf`) had **no luxmap vhost** — lost when sibling projects were added. SNI for luxmap fell through to the labsync default 443 block → wrong cert (`CN=labsync...`); HSTS `includeSubDomains` on `devokss.online` made Chrome hard-block.
+- **Fix**: restored a luxmap vhost proxying to the existing internal host nginx (`172.18.0.1:8090` → `deploy/nginx-soms.conf` → php8.3-fpm); the already-valid certbot cert at `/etc/letsencrypt/live/luxmap.devokss.online` (synced to `/opt/labsync/certs/luxmap/`) is used.
+
+### Incident 2 — perpetual "419 Page Expired" on labsync (SOMS at same risk)
+- **Cause**: the hulagway app's **server** `.env` (repo was clean, VPS had drifted) had `SESSION_DOMAIN=.devokss.online`, leaking its `XSRF-TOKEN`/`hulagway_session` cookies onto EVERY subdomain. Browsers then sent two `XSRF-TOKEN`s (different APP_KEYs) to labsync → CSRF mismatch on all POSTs.
+- **Fix**: `SESSION_DOMAIN=null` on the server + `config:clear && config:cache` (cached config silently overrides `.env`); all three proxy vhosts now send delete-headers purging stale domain-scoped cookies. **Hard rule for every app on this box: cookies stay host-scoped.**
+
+### Structural changes (why the repos changed)
+- Proxy nginx config split into **one file per project**: `/opt/labsync/.docker/nginx/conf.d/{00-labsync,10-hulagway,20-luxmap}.conf` (directory-mounted — no more single-file clobbering, no inode/restart gotcha). `00-labsync` must stay first (default/catch-all vhost). Canonical copies now tracked: labsync file in the AVILA repo; `deploy/proxy/20-luxmap.conf` here; `deploy/proxy/10-hulagway.conf` in SABACAHAN.
+- `deploy/nginx-soms.conf` refreshed to match live (adds `listen 172.18.0.1:8090` for Docker→host traffic; ufw allows `172.16.0.0/12 → 8090`).
+- **TLS automation**: labsync's own cert was a static file nothing renewed (would've died Nov 20) — adopted by host certbot; the luxmap-only renewal hook replaced by `/etc/letsencrypt/renewal-hooks/deploy/devokss-sync-certs.sh` syncing all three certs + reloading the proxy (`certbot renew --dry-run` verified).
+- `deploy/setup-vps.md` §7 rewritten — the old `certbot --nginx -d luxmap...` instructions would have broken the shared proxy on a fresh setup.
+- Incident during verification: recreating the proxy container with only the base compose (not `docker-compose.prod.yml`) 404'd all Vite assets → white screen on labsync; fixed + documented there. Lesson: the proxy is shared infra — always deploy it with **both** compose files, and verify all three domains + `certbot certificates` after any change.
+
+## Previous Session (August 22, 2026) — production launch on Hostinger VPS + security/cleanup pass
 
 > Backend work. The student PWA got matching changes (face verification hardening, verification persistence, env-config fallbacks fixing the Vercel 405) — see `PWA-SUMMARY.md`. **The system is now LIVE**: admin portal at `https://luxmap.devokss.online`, student PWA at `https://luxmap-topaz.vercel.app`.
 
