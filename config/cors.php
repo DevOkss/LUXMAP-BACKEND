@@ -31,6 +31,7 @@ return [
         'Content-Type',
         'Authorization',
         'X-Device-Fingerprint',
+        'X-Device-Meta',
         'X-Requested-With',
     ],
 

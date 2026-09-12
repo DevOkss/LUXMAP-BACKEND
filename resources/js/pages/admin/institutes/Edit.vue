@@ -54,9 +54,13 @@ const removeLogo = () => {
 }
 
 const submit = () => {
-    form.post(`/admin/institutes/${props.institute.id}`, {
+    // Use POST with _method PUT spoofing + forceFormData so file uploads work (PUT+multipart is not supported by browsers/PHP).
+    // Previously _method was passed as an Inertia option (ignored) → POST to /admin/institutes/{id} without spoofing → 405 Method Not Allowed.
+    form.transform((data) => ({
+        ...data,
+        _method: 'PUT',
+    })).post(`/admin/institutes/${props.institute.id}`, {
         forceFormData: true,
-        _method: 'put',
     })
 }
 </script>

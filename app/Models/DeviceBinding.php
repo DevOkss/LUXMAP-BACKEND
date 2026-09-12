@@ -11,6 +11,7 @@ class DeviceBinding extends Model
         'user_id',
         'device_fingerprint',
         'device_meta',
+        'trusted_fingerprints',
         'bound_at',
     ];
 
@@ -18,6 +19,7 @@ class DeviceBinding extends Model
     {
         return [
             'device_meta' => 'array',
+            'trusted_fingerprints' => 'array',
             'bound_at' => 'datetime',
         ];
     }

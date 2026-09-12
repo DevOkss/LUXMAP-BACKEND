@@ -94,6 +94,10 @@ Route::middleware(['auth', 'verified', "role:{$adminRoles}"])->name('admin.')->p
             ->name('institutes.edit');
         Route::put('/institutes/{institute}', [InstituteController::class, 'update'])
             ->name('institutes.update');
+        // POST fallback for file uploads: browsers/Inertia cannot send multipart PUT, so the frontend POSTs with _method=PUT (method spoofing).
+        // Adding an explicit POST route also allows direct POST without spoofing to still update (defensive), fixing the 405 seen on logo upload.
+        Route::post('/institutes/{institute}', [InstituteController::class, 'update'])
+            ->name('institutes.update.post');
         Route::delete('/institutes/{institute}', [InstituteController::class, 'destroy'])
             ->name('institutes.destroy');
 

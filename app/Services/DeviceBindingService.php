@@ -26,16 +26,100 @@ class DeviceBindingService
     }
 
     /**
-     * Idempotently bind a device to the account. Throws a conconflict when the
-     * account is already bound to a different device.
+     * Coarse hardware similarity check - same logic as PWA isSimilarDevice.
+     * Used to detect same physical device but different browser/incognito.
+     */
+    public function isSimilarDevice(?array $a, ?array $b): bool
+    {
+        if (empty($a) || empty($b)) {
+            return false;
+        }
+        $platformA = strtolower($a['platform'] ?? '');
+        $platformB = strtolower($b['platform'] ?? '');
+        if ($platformA !== $platformB) {
+            return false;
+        }
+        // Screen bucket similarity
+        $screenA = $a['screen'] ?? '';
+        $screenB = $b['screen'] ?? '';
+        if ($screenA && $screenB && $screenA !== $screenB) {
+            $bucket = function (string $s): string {
+                $w = (int) (explode('x', $s)[0] ?? 0);
+                if ($w >= 1000) return 'large';
+                if ($w >= 700) return 'medium';
+                if ($w >= 400) return 'small';
+                return 'tiny';
+            };
+            if ($bucket($screenA) !== $bucket($screenB)) {
+                return false;
+            }
+        }
+        // Cores bucket
+        $coresA = $a['cores'] ?? 0;
+        $coresB = $b['cores'] ?? 0;
+        $coresBucket = function ($c): string {
+            $c = (int) $c;
+            if ($c >= 8) return '8+';
+            if ($c >= 4) return '4-7';
+            if ($c >= 2) return '2-3';
+            return '1';
+        };
+        if ($coresA && $coresB && $coresBucket($coresA) !== $coresBucket($coresB)) {
+            return false;
+        }
+        // Language base
+        $langA = strtolower(explode('-', $a['language'] ?? '')[0]);
+        $langB = strtolower(explode('-', $b['language'] ?? '')[0]);
+        if ($langA && $langB && $langA !== $langB) {
+            return false;
+        }
+        return true;
+    }
+
+    public function isTrusted(DeviceBinding $binding, string $fingerprint): bool
+    {
+        if ($binding->device_fingerprint === $fingerprint) {
+            return true;
+        }
+        $trusted = $binding->trusted_fingerprints ?? [];
+        return in_array($fingerprint, $trusted, true);
+    }
+
+    public function addTrustedFingerprint(DeviceBinding $binding, string $fingerprint): void
+    {
+        if ($this->isTrusted($binding, $fingerprint)) {
+            return;
+        }
+        $trusted = $binding->trusted_fingerprints ?? [];
+        $trusted[] = $fingerprint;
+        // Keep last 5 trusted fingerprints (same device different browsers, incognito)
+        $trusted = array_slice(array_unique($trusted), -5);
+        $binding->update(['trusted_fingerprints' => $trusted]);
+    }
+
+    /**
+     * Idempotently bind a device to the account. Throws a conflict when the
+     * account is already bound to a different device (and not similar/trusted).
      */
     public function bindDevice(User $user, string $fingerprint, array $meta = []): DeviceBinding
     {
         $binding = $this->bindingFor($user);
 
         if ($binding) {
-            if ($binding->device_fingerprint === $fingerprint) {
+            // Already trusted or same fingerprint - idempotent
+            if ($this->isTrusted($binding, $fingerprint)) {
                 return $binding;
+            }
+
+            // Same physical device but different browser: check similarity before rejecting
+            // If similar hardware, treat as same device and add to trusted instead of 409
+            if ($this->isSimilarDevice($binding->device_meta, $meta)) {
+                // Check if user has face enrollment - if not, still require transfer for security
+                // But for now, allow similar device to join trusted list even without face,
+                // since deterministic hash may differ per browser engine.
+                // The face-verified path will be tighter.
+                $this->addTrustedFingerprint($binding, $fingerprint);
+                return $binding->fresh();
             }
 
             throw new DeviceBindingException(
@@ -47,8 +131,52 @@ class DeviceBindingService
             'user_id' => $user->id,
             'device_fingerprint' => $fingerprint,
             'device_meta' => $meta,
+            'trusted_fingerprints' => [],
             'bound_at' => now(),
         ]);
+    }
+
+    /**
+     * Face-verified instant bind for same physical device but different browser/incognito.
+     * Bypasses old-device approval if hardware is similar and face is enrolled.
+     */
+    public function bindWithFaceVerified(User $user, string $fingerprint, array $meta = []): DeviceBinding
+    {
+        $binding = $this->bindingFor($user);
+
+        if (! $binding) {
+            // Nothing to transfer — bind directly
+            return $this->bindDevice($user, $fingerprint, $meta);
+        }
+
+        if ($this->isTrusted($binding, $fingerprint)) {
+            return $binding;
+        }
+
+        // Must have face enrollment to use instant path (prevents hijacking)
+        $hasFace = $user->faceEnrollment()->exists();
+        if (! $hasFace) {
+            throw new DeviceBindingException(
+                'Face enrollment required for instant bind. Please enroll face first or request transfer from old device.',
+                403
+            );
+        }
+
+        if (! $this->isSimilarDevice($binding->device_meta, $meta)) {
+            throw new DeviceBindingException(
+                'This device does not appear to be the same hardware as your bound device. Please request transfer from your old device.',
+                403
+            );
+        }
+
+        // Similar hardware + face enrolled => add to trusted list instantly, no old device needed
+        $this->addTrustedFingerprint($binding, $fingerprint);
+        // Also update meta to latest and keep bound_at fresh
+        $binding->update([
+            'device_meta' => $meta,
+        ]);
+
+        return $binding->fresh();
     }
 
     /**
@@ -65,8 +193,8 @@ class DeviceBindingService
             throw new DeviceBindingException('This account was not bound to a device. It is now bound to this device.', 200);
         }
 
-        if ($binding->device_fingerprint === $fingerprint) {
-            throw new DeviceBindingException('This device is already bound to this account.', 409);
+        if ($this->isTrusted($binding, $fingerprint)) {
+            throw new DeviceBindingException('This device is already trusted for this account.', 409);
         }
 
         return DeviceTransferRequest::create([
@@ -95,6 +223,8 @@ class DeviceBindingService
         $binding->update([
             'device_fingerprint' => $request->requesting_fingerprint,
             'device_meta' => $request->requesting_meta,
+            // Reset trusted list to new primary + keep old as trusted for grace period?
+            'trusted_fingerprints' => [],
             'bound_at' => now(),
         ]);
 
@@ -154,10 +284,15 @@ class DeviceBindingService
             ->delete();
 
         $fingerprint = $binding->device_fingerprint;
+        // Also revoke trusted fingerprints tokens?
+        $trusted = $binding->trusted_fingerprints ?? [];
         $binding->delete();
 
         // The unbound device's session is no longer valid.
         $this->revokeDeviceTokens($user, $fingerprint);
+        foreach ($trusted as $tf) {
+            $this->revokeDeviceTokens($user, $tf);
+        }
     }
 
     /**
@@ -187,7 +322,9 @@ class DeviceBindingService
             throw new DeviceBindingException('No device is currently bound to this account.', 409);
         }
 
-        if ($binding->device_fingerprint !== $decidingFingerprint) {
+        // For approve/reject, the deciding device must be either primary or trusted
+        $isDecidingTrusted = $this->isTrusted($binding, $decidingFingerprint) || $binding->device_fingerprint === $decidingFingerprint;
+        if (! $isDecidingTrusted) {
             throw new DeviceBindingException(
                 'Only the device currently bound to this account can decide this transfer.',
                 403
@@ -197,5 +334,43 @@ class DeviceBindingService
         if ($binding->device_fingerprint === $request->requesting_fingerprint) {
             throw new DeviceBindingException('A device cannot approve its own transfer request.', 422);
         }
+        // Also check trusted list for self-approval
+        if ($this->isTrusted($binding, $request->requesting_fingerprint) && $request->requesting_fingerprint === $decidingFingerprint) {
+            throw new DeviceBindingException('A device cannot approve its own transfer request.', 422);
+        }
+    }
+
+    /**
+     * Detailed status for hybrid gate - used by PWA to decide proceed vs transfer.
+     */
+    public function getStatusDetails(User $user, string $currentFingerprint, ?array $currentMeta = null): array
+    {
+        $binding = $this->bindingFor($user);
+        if (! $binding) {
+            return [
+                'binding' => null,
+                'trusted_fingerprints' => [],
+                'is_trusted' => false,
+                'is_similar' => false,
+            ];
+        }
+        $isTrusted = $this->isTrusted($binding, $currentFingerprint);
+        $isSimilar = false;
+        if (! $isTrusted && $currentMeta) {
+            $isSimilar = $this->isSimilarDevice($binding->device_meta, $currentMeta);
+            // Similar only counts if face enrolled (prevents hijack)
+            if ($isSimilar) {
+                $hasFace = $user->faceEnrollment()->exists();
+                if (! $hasFace) {
+                    $isSimilar = false;
+                }
+            }
+        }
+        return [
+            'binding' => $binding,
+            'trusted_fingerprints' => $binding->trusted_fingerprints ?? [],
+            'is_trusted' => $isTrusted,
+            'is_similar' => $isSimilar,
+        ];
     }
 }

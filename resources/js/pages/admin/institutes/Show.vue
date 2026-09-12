@@ -38,6 +38,8 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: props.institute.name, href: `/admin/institutes/${props.institute.id}` },
 ]
 
+const logoFallback = '/branding/luxmap.png'
+
 const programForm = useForm({
     code: '',
     name: '',
@@ -112,6 +114,31 @@ const destroy = () => {
                     </div>
                 </template>
             </PageHeader>
+
+            <!-- Institute overview with logo (renders photo uploaded during creation/edit) -->
+            <Card class="overflow-hidden">
+                <CardContent class="flex items-center gap-6 p-6">
+                    <img
+                        :src="institute.logo_url || logoFallback"
+                        :alt="institute.name + ' logo'"
+                        class="h-24 w-24 rounded-xl border bg-background object-cover"
+                    />
+                    <div class="min-w-0">
+                        <h2 class="text-xl font-semibold leading-none tracking-tight">{{ institute.name }}</h2>
+                        <p class="mt-1 text-sm text-muted-foreground">{{ institute.code }}</p>
+                        <p class="mt-2 text-sm">
+                            <span
+                                :class="institute.is_active ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'"
+                                class="font-medium"
+                            >
+                                {{ institute.is_active ? 'Active' : 'Inactive' }}
+                            </span>
+                        </p>
+                        <p v-if="institute.logo_url" class="mt-1 text-xs text-muted-foreground">Logo: {{ institute.logo_url }}</p>
+                        <p v-else class="mt-1 text-xs text-muted-foreground">No custom logo — showing fallback</p>
+                    </div>
+                </CardContent>
+            </Card>
 
             <div class="grid gap-4 lg:grid-cols-3">
                 <Card class="overflow-hidden lg:col-span-2">

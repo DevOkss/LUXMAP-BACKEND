@@ -22,21 +22,53 @@ class DeviceController extends Controller
         return (string) $request->header(DeviceBindingService::FINGERPRINT_HEADER, '');
     }
 
+    private function currentMeta(Request $request): ?array
+    {
+        // Try header X-Device-Meta (JSON) first, then query/body device_meta
+        $header = $request->header('X-Device-Meta');
+        if ($header) {
+            $decoded = json_decode($header, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+        $meta = $request->input('device_meta');
+        if (is_array($meta)) {
+            return $meta;
+        }
+        if (is_string($meta)) {
+            $decoded = json_decode($meta, true);
+            if (is_array($decoded)) return $decoded;
+        }
+        return null;
+    }
+
     /**
      * Whether the account has a bound device, and which fingerprint it is.
-     * The client compares against its own fingerprint.
+     * Hybrid: also returns trusted list and similarity hint for same-device cross-browser.
      */
     public function status(Request $request): JsonResponse
     {
-        $binding = $this->deviceService->bindingFor($request->user());
+        $user = $request->user();
+        $fp = $this->fingerprint($request);
+        $meta = $this->currentMeta($request) ?? $request->input('device_meta');
+        // If meta still null, try to get from request header JSON or fallback
+        if (is_string($meta)) {
+            $meta = json_decode($meta, true);
+        }
+        $details = $this->deviceService->getStatusDetails($user, $fp, is_array($meta) ? $meta : null);
+        $binding = $details['binding'];
 
         return response()->json([
-            'fingerprint' => $this->fingerprint($request),
+            'fingerprint' => $fp,
             'binding' => $binding ? [
                 'device_fingerprint' => $binding->device_fingerprint,
                 'device_meta' => $binding->device_meta,
                 'bound_at' => $binding->bound_at?->toDateTimeString(),
             ] : null,
+            'trusted_fingerprints' => $details['trusted_fingerprints'],
+            'is_trusted' => $details['is_trusted'],
+            'is_similar' => $details['is_similar'],
         ]);
     }
 
@@ -65,6 +97,38 @@ class DeviceController extends Controller
                 'bound_at' => $binding->bound_at?->toDateTimeString(),
             ],
         ], 201);
+    }
+
+    /**
+     * Face-verified instant bind for same physical device but different browser/incognito.
+     * Bypasses old-device approval if hardware is similar and face is enrolled.
+     */
+    public function bindFaceVerified(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'device_fingerprint' => ['required', 'string', 'min:8'],
+            'device_meta' => ['sometimes', 'array'],
+        ]);
+
+        try {
+            $binding = $this->deviceService->bindWithFaceVerified(
+                $request->user(),
+                $data['device_fingerprint'],
+                $data['device_meta'] ?? [],
+            );
+        } catch (DeviceBindingException $e) {
+            return response()->json(['message' => $e->getMessage()], $e->status);
+        }
+
+        return response()->json([
+            'message' => 'Device bound via face verification (same hardware)',
+            'binding' => [
+                'device_fingerprint' => $binding->device_fingerprint,
+                'device_meta' => $binding->device_meta,
+                'bound_at' => $binding->bound_at?->toDateTimeString(),
+                'trusted_fingerprints' => $binding->trusted_fingerprints ?? [],
+            ],
+        ], 200);
     }
 
     public function transferRequest(Request $request): JsonResponse

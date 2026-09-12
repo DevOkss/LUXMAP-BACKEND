@@ -117,6 +117,7 @@ Route::name('api.')->group(function () {
         // X-Device-Fingerprint header).
         Route::get('/device/status', [DeviceController::class, 'status'])->name('device.status');
         Route::post('/devices/bind', [DeviceController::class, 'bind'])->name('device.bind');
+        Route::post('/devices/bind/face-verified', [DeviceController::class, 'bindFaceVerified'])->name('device.bind-face-verified');
         Route::post('/devices/transfer/request', [DeviceController::class, 'transferRequest'])->name('device.transfer-request');
         Route::get('/devices/transfer/requests', [DeviceController::class, 'transferRequests'])->name('device.transfer-requests');
         Route::post('/devices/transfer/requests/{transfer}/approve', [DeviceController::class, 'approve'])->name('device.transfer-approve');

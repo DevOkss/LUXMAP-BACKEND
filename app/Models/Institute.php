@@ -19,6 +19,8 @@ class Institute extends Model
         'is_active',
     ];
 
+    protected $appends = ['logo_url'];
+
     protected function casts(): array
     {
         return [

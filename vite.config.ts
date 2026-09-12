@@ -30,14 +30,16 @@ export default defineConfig({
             plugins: [tailwindcss, autoprefixer],
         },
     },
-    // server: {
-    //     host: "0.0.0.0", // Allow Vite to listen on all network interfaces
-    //     port: 5174, // Or any available port
-    //     hmr: {
-    //         host: "192.168.254.116", // Replace with your local machine's IP address
-    //     },
-    //     headers: {
-    //         "Access-Control-Allow-Origin": "*",
-    //     },
-    // },
+    // DEPLOYMENT BACKUP (commented for local dev - original HMR host for shared VPS/network):
+    // server: { host: "0.0.0.0", port: 5174, hmr: { host: "192.168.254.116" }, headers: { "Access-Control-Allow-Origin": "*" } }
+    server: {
+        host: "0.0.0.0", // Local dev on 5174 - SOMS (Hulagway stopped on this port per user request)
+        port: 5174,
+        hmr: {
+            host: "localhost",
+        },
+        headers: {
+            "Access-Control-Allow-Origin": "*",
+        },
+    },
 });
