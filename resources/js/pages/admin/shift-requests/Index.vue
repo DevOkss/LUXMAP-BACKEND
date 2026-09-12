@@ -13,8 +13,8 @@ import { ref } from 'vue'
 interface ShiftRequestRow {
     id: number
     student: { name: string; student_number: string | null } | null
-    current: { institute: string | null; program: string | null }
-    requested: { institute: string | null; program: string | null }
+    current: { institute: string | null; program: string | null; institute_id: number | null; program_id: number | null }
+    requested: { institute: string | null; program: string | null; institute_id: number | null; program_id: number | null }
     reason: string | null
     status: 'pending' | 'approved' | 'rejected'
     remarks: string | null
@@ -22,9 +22,17 @@ interface ShiftRequestRow {
     created_at: string | null
 }
 
+interface InstituteOption {
+    id: number
+    code: string
+    name: string
+    programs: { id: number; code: string; name: string }[]
+}
+
 const props = defineProps<{
     requests: { data: ShiftRequestRow[]; current_page: number; last_page: number; total: number; per_page: number }
     filters: { status: string | null }
+    institutes: InstituteOption[]
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -41,10 +49,57 @@ const meta = {
 
 const reviewing = ref<ShiftRequestRow | null>(null)
 const remarks = ref('')
+const editInstituteId = ref<number | null>(null)
+const editProgramId = ref<number | null>(null)
+const editReason = ref('')
+const isSavingEdit = ref(false)
 
 function openReview(row: ShiftRequestRow) {
     reviewing.value = row
     remarks.value = ''
+    editInstituteId.value = row.requested.institute_id
+    editProgramId.value = row.requested.program_id
+    editReason.value = row.reason || ''
+}
+
+const availablePrograms = (): { id: number; code: string; name: string }[] => {
+    const inst = props.institutes.find((i) => i.id === editInstituteId.value)
+    return inst ? inst.programs : []
+}
+
+function onEditInstituteChange() {
+    editProgramId.value = null
+}
+
+function saveEdit() {
+    if (!reviewing.value) return
+    isSavingEdit.value = true
+    router.patch(
+        `/admin/shift-requests/${reviewing.value.id}`,
+        {
+            requested_institute_id: editInstituteId.value,
+            requested_program_id: editProgramId.value,
+            reason: editReason.value || null,
+        },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                // Update local row to reflect saved changes so approve uses new values
+                if (reviewing.value) {
+                    const inst = props.institutes.find((i) => i.id === editInstituteId.value)
+                    const prog = inst?.programs.find((p) => p.id === editProgramId.value)
+                    reviewing.value.requested.institute = inst?.name || null
+                    reviewing.value.requested.program = prog?.name || null
+                    reviewing.value.requested.institute_id = editInstituteId.value
+                    reviewing.value.requested.program_id = editProgramId.value
+                    reviewing.value.reason = editReason.value || null
+                }
+            },
+            onFinish: () => {
+                isSavingEdit.value = false
+            },
+        },
+    )
 }
 
 function confirmApprove() {
@@ -147,17 +202,58 @@ const statusStyles: Record<ShiftRequestRow['status'], string> = {
             </Card>
 
             <Dialog v-if="reviewing" :open="!!reviewing" @update:open="(v: boolean) => { if (!v) reviewing = null }">
-                <DialogContent>
+                <DialogContent class="max-w-lg">
                     <DialogHeader>
                         <DialogTitle>Review shift request</DialogTitle>
                         <DialogDescription>
-                            <span class="font-medium">{{ reviewing.student?.name }}</span> requests shifting from
-                            {{ reviewing.current.institute }} / {{ reviewing.current.program }} to
-                            {{ reviewing.requested.institute }} / {{ reviewing.requested.program }}.
+                            <span class="font-medium">{{ reviewing.student?.name }}</span> ({{ reviewing.student?.student_number }}) requests shifting from
+                            <strong>{{ reviewing.current.institute }} / {{ reviewing.current.program }}</strong> to
+                            <strong>{{ reviewing.requested.institute }} / {{ reviewing.requested.program }}</strong>.
                         </DialogDescription>
                     </DialogHeader>
-                    <div class="grid gap-2">
-                        <label class="text-sm font-medium">Remarks (optional)</label>
+
+                    <div v-if="reviewing.status === 'pending'" class="space-y-4 border-t pt-4">
+                        <p class="text-sm font-semibold">Modify requested destination (optional)</p>
+                        <p class="text-xs text-muted-foreground">As superadmin you can correct the requested institute/program before approving.</p>
+                        <div class="grid gap-3">
+                            <div class="space-y-1.5">
+                                <label class="text-sm font-medium">Requested Institute</label>
+                                <select
+                                    v-model="editInstituteId"
+                                    @change="onEditInstituteChange"
+                                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                    <option :value="null" disabled>Select institute</option>
+                                    <option v-for="inst in institutes" :key="inst.id" :value="inst.id">
+                                        {{ inst.name }} ({{ inst.code }})
+                                    </option>
+                                </select>
+                            </div>
+                            <div class="space-y-1.5">
+                                <label class="text-sm font-medium">Requested Program</label>
+                                <select
+                                    v-model="editProgramId"
+                                    :disabled="!editInstituteId"
+                                    class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                                >
+                                    <option :value="null" disabled>{{ editInstituteId ? 'Select program' : 'Select institute first' }}</option>
+                                    <option v-for="prog in availablePrograms()" :key="prog.id" :value="prog.id">
+                                        {{ prog.name }} ({{ prog.code }})
+                                    </option>
+                                </select>
+                            </div>
+                            <div class="space-y-1.5">
+                                <label class="text-sm font-medium">Reason</label>
+                                <Input v-model="editReason" placeholder="Reason for shifting" />
+                            </div>
+                            <Button variant="outline" size="sm" :disabled="isSavingEdit" @click="saveEdit">
+                                {{ isSavingEdit ? 'Saving...' : 'Save changes' }}
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div class="grid gap-2 border-t pt-4">
+                        <label class="text-sm font-medium">Remarks (optional, shown to student)</label>
                         <Input v-model="remarks" placeholder="Notes for the student" />
                     </div>
                     <DialogFooter>

@@ -26,7 +26,7 @@ class PermissionRegistry
     public const HEAD_MODULES = [
         'dashboard', 'officers', 'events', 'calendar', 'fees', 'payments',
         'payment_accounts',
-        'penalties', 'notifications', 'activity_logs', 'device_bindings',
+        'penalties', 'notifications', 'activity_logs',
     ];
 
     /** Officer-facing module keys. */

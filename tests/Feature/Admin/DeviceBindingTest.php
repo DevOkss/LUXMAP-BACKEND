@@ -51,7 +51,8 @@ test('heads can view device bindings scoped to their organizations', function ()
     $student = User::factory()->create(['is_enrolled' => true]);
     makeBinding($student);
 
-    $this->actingAs($head)->get('/admin/device-bindings')->assertOk();
+    // Device bindings is now super_admin only (per latest requirement)
+    $this->actingAs($head)->get('/admin/device-bindings')->assertForbidden();
 });
 
 test('officers and students are forbidden from device bindings', function () {

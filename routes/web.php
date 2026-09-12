@@ -179,6 +179,8 @@ Route::middleware(['auth', 'verified', "role:{$adminRoles}"])->name('admin.')->p
     Route::middleware('role:super_admin')->group(function () {
         Route::get('/shift-requests', [ShiftRequestController::class, 'index'])
             ->name('shift-requests.index');
+        Route::patch('/shift-requests/{shiftRequest}', [ShiftRequestController::class, 'update'])
+            ->name('shift-requests.update');
         Route::patch('/shift-requests/{shiftRequest}/approve', [ShiftRequestController::class, 'approve'])
             ->name('shift-requests.approve');
         Route::patch('/shift-requests/{shiftRequest}/reject', [ShiftRequestController::class, 'reject'])
@@ -246,8 +248,8 @@ Route::middleware(['auth', 'verified', "role:{$adminRoles}"])->name('admin.')->p
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])
         ->name('notifications.read-all');
 
-    // One-device binding — heads and super admin monitor; any of them unbind.
-    Route::middleware('role:super_admin,ssc_head,institute_head,sro_head')->group(function () {
+    // One-device binding — super admin only (per latest requirement).
+    Route::middleware('role:super_admin')->group(function () {
         Route::get('/device-bindings', [DeviceBindingController::class, 'index'])
             ->name('device-bindings.index');
         Route::delete('/device-bindings/{binding}', [DeviceBindingController::class, 'unbind'])

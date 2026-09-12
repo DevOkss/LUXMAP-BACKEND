@@ -40,7 +40,8 @@ class HeadController extends Controller
                     ->orWhere('email', 'like', "%{$search}%");
             }))
             ->with('organizations:id,code,name,type')
-            ->orderBy('name')
+            ->latest('users.created_at')
+            ->latest('users.id')
             ->paginate($perPage)
             ->through(fn (User $user) => [
                 'id' => $user->id,

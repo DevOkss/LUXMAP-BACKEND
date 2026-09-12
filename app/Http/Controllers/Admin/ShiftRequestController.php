@@ -37,10 +37,14 @@ class ShiftRequestController extends Controller
                 'current' => [
                     'institute' => $shift->currentInstitute?->name,
                     'program' => $shift->currentProgram?->name,
+                    'institute_id' => $shift->current_institute_id,
+                    'program_id' => $shift->current_program_id,
                 ],
                 'requested' => [
                     'institute' => $shift->requestedInstitute?->name,
                     'program' => $shift->requestedProgram?->name,
+                    'institute_id' => $shift->requested_institute_id,
+                    'program_id' => $shift->requested_program_id,
                 ],
                 'reason' => $shift->reason,
                 'status' => $shift->status,
@@ -49,9 +53,20 @@ class ShiftRequestController extends Controller
                 'created_at' => $shift->created_at?->toDateTimeString(),
             ]);
 
+        $institutes = \App\Models\Institute::with('programs:id,institute_id,code,name')
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($inst) => [
+                'id' => $inst->id,
+                'code' => $inst->code,
+                'name' => $inst->name,
+                'programs' => $inst->programs->map(fn ($p) => ['id' => $p->id, 'code' => $p->code, 'name' => $p->name])->values(),
+            ])->values();
+
         return Inertia::render('admin/shift-requests/Index', [
             'requests' => $requests,
             'filters' => ['status' => $request->input('status')],
+            'institutes' => $institutes,
         ]);
     }
 
@@ -114,6 +129,36 @@ class ShiftRequestController extends Controller
 
         return redirect()->route('admin.shift-requests.index')
             ->with('success', 'Shift request rejected.');
+    }
+
+    public function update(Request $request, ShiftRequest $shiftRequest): RedirectResponse
+    {
+        $this->authorize($shiftRequest);
+
+        if ($shiftRequest->status !== ShiftRequest::STATUS_PENDING) {
+            return redirect()->route('admin.shift-requests.index')
+                ->with('error', 'Only pending requests can be modified.');
+        }
+
+        $validated = $request->validate([
+            'requested_institute_id' => ['required', 'integer', 'exists:institutes,id'],
+            'requested_program_id' => ['required', 'integer', 'exists:programs,id'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $program = \App\Models\Program::find($validated['requested_program_id']);
+        if ($program && (int) $program->institute_id !== (int) $validated['requested_institute_id']) {
+            return redirect()->back()->withErrors(['requested_program_id' => 'The program does not belong to the selected institute.']);
+        }
+
+        $shiftRequest->update([
+            'requested_institute_id' => $validated['requested_institute_id'],
+            'requested_program_id' => $validated['requested_program_id'],
+            'reason' => $validated['reason'] ?? $shiftRequest->reason,
+        ]);
+
+        return redirect()->route('admin.shift-requests.index')
+            ->with('success', 'Shift request updated.');
     }
 
     private function authorize(ShiftRequest $shiftRequest): void
