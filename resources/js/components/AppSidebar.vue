@@ -5,7 +5,7 @@ import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import {
-    LayoutGrid, Users, Calendar, CalendarRange, DollarSign,
+    LayoutGrid, Users, Calendar, CalendarRange, PhilippinePeso,
     CreditCard, Bell, Building2, UserCog, ShieldCheck, GraduationCap, History, ArrowLeftRight, CalendarClock,
     ClipboardList, Wallet, MonitorSmartphone
 } from 'lucide-vue-next';
@@ -29,7 +29,7 @@ const moduleIcons: Record<string, object> = {
     officers: ShieldCheck,
     events: Calendar,
     calendar: CalendarRange,
-    fees: DollarSign,
+    fees: PhilippinePeso,
     payments: CreditCard,
     payment_submissions: ClipboardList,
     payment_accounts: Wallet,
