@@ -1,6 +1,34 @@
 # SOMS — Laravel Admin Portal
 
-## Latest Session (September 5, 2026) — production infra rescue: TLS vhost restored, shared-VPS cookie fix, per-project proxy configs
+## Latest Session (September 13, 2026) — notifications delete, receipt Processed by + Centavos words, walk-in without payment account
+
+> Follow-up to the Sept 13 PWA push — student PWA got matching notification/delete + receipt fixes (`PWA-SUMMARY.md`). **Deployed via SSH without touching the shared proxy**: `f213b81` pulled and `deploy/deploy.sh` rerun on `76.13.220.161` (`git pull --ff-only` → `composer install` → `npm ci && vite build` → `migrate` none → `config/route/view cache` → `php8.3-fpm reload`). Verified `luxmap` new chunks `app-80Tj6Zfd.js`/`Index-D6mkC2nI.js` contain `Delete All` + `Processed by`, siblings `labsync`/`hulagway` stay 200.
+
+### Notification delete (all + single) — all accounts
+- **`NotificationService::delete` / `clearAll`** (`app/Services/NotificationService.php:47`): scoped deletes via `$user->notifications()->where('id',$id)` / `->delete()` (all). 
+- **API** (`app/Http/Controllers/Api/NotificationController.php:47`): `DELETE /api/notifications` → `clear` + `DELETE /api/notifications/{id}` (UUID `where('[0-9a-fA-F\-]{36}')`, ordered after `push-subscription` so `DELETE .../push-subscription` no longer 404). Returns `{message,count}` / 404.
+- **Web** (`app/Http/Controllers/Admin/NotificationController.php:47`): `DELETE /admin/notifications` + `DELETE /admin/notifications/{id}` inside `role:$adminRoles` group → visible to `super_admin` + all heads/officers. Inertia `redirect()->back()`.
+- **Admin UI** (`resources/js/pages/admin/notifications/Index.vue:37`): per-row **Delete** (trash, `confirm`) + header **Delete All** (`confirm` “cannot be undone”, `router.delete` `preserveScroll`). Unread dot logic unchanged. All roles now see controls on `https://luxmap.devokss.online/admin/notifications`.
+- **Fix**: previous PWA `fetchNotifications` did `response.data.data || response.data.notifications` — but Laravel returns `{notifications:{data:[...]}}` wrapped, so `notifications` became object and `delete` appeared to do nothing. Fixed robust parsing in PWA (`stores/notificationStore.ts:15` handles array / `{data:[...]}` nested).
+- Tests green: `Api\NotificationTest` + `PushNotificationsTest` 14 passed; `AdminPaymentsTest` 16 passed; full suite 323 passed after initial `push-subscription` 404 fix.
+
+### Receipt Processed by + amount in words Centavos
+- **Amount words** (`resources/js/pages/admin/payments/Show.vue:140`): was always ` Pesos and 00/100` (`550 → Five Hundred Fifty Pesos and 00/100 Only`). Now `numberToWords` uses `Peso/Pesos` + `Centavo/s` words: `550 → Five Hundred Fifty Pesos Only`, `550.50 → ... and Fifty Centavos Only`, `1.01 → One Peso and One Centavo Only`, `0.50 → Zero Pesos and Fifty Centavos Only`. New helper `pwa-soms/src/utils/amountWords.ts:1` mirrors logic; `receipts/Show.vue:58` shows same line.
+- **Processed by verifier** — every cash/cashless payment now carries verifier on the receipt:
+  - `PaymentRepository::query`/`find`/`findByUuid` now eager loads `processedBy`, `submission.verifiedBy`, `receipt.issuedBy` (`app/Repositories/PaymentRepository.php:78`).
+  - `PaymentResource` (`app/Http/Resources/PaymentResource.php:113`) exposes `processedBy`/`exemptedBy`/`verifiedBy`; `ReceiptResource` (`app/Http/Resources/ReceiptResource.php:18`) exposes `payment.processedBy/verifiedBy/exemptedBy` + `issued_by`.
+  - `PaymentSubmissionService::settleFromSubmission` already sets `processed_by` (=approving officer) and `Receipt::issued_by`; admin `PaymentController::batchDetailRow` (`app/Http/Controllers/Admin/PaymentController.php:580`) now derives `processed = $first->processedBy ?: $first->submission?->verifiedBy` + `verified_at` and `submissionGroupRow` adds `verifiedBy`/`verified_at`; `groupTransactionBatches` adds `processedBy`/`exemptedBy`.
+  - **Admin receipt** (`resources/js/pages/admin/payments/Show.vue:246`): under amount-words, `Processed by OfficerName on date` when `!isExempted && (processedBy||verifiedBy)` (exempted keeps `Granted by`). `Batch` type now `verifiedBy?`/`verified_at?`.
+  - **API** (`app/Http/Controllers/Api/PaymentController.php:100`): `submissions`/`submissionDetail` now include `verified_by:{id,name}|null` + `verified_at`; PWA `Submissions.vue:110` shows `Processed by ... on ...`.
+
+### Walk-in without payment account — officers scoped
+- **No backend guard** already — `PaymentController::recordCash` (`app/Http/Controllers/Admin/PaymentController.php:214`) only checks `authorizeProcessor` (`staffRoles` + `isWithinScope`), never `PaymentAccount`. `RecordCashRequest` has no account rule. Verified officer can `Record Cash Payment` for own org even when `payment_accounts` empty.
+- **UI hint** (`resources/js/pages/admin/payments/StudentDetail.vue:188`): when `feeAccount` exists note “Walk-in cash does not require…”, else amber panel “No online payment account… Walk-in cash still available — officers can record cash for their scoped organization without an online recipient account.” (resolves the “cannot cater walk-in” report).
+
+### Deploy verification
+- `curl -sI https://luxmap.devokss.online/login` 200 (new `app-80Tj6Zfd.js`), `labsync`/`hulagway` 200, `curl /build/manifest.json` shows `Index-D6mkC2nI.js` with `Delete All`, `Show-Bnzqx-gf.js` with `Processed by` + `Centavo`. PWA `2e67699` pushed to `DevOkss/LUXMAP-PWA:main` (Vercel auto).
+
+## Previous Session (September 5, 2026) — production infra rescue: TLS vhost restored, shared-VPS cookie fix, per-project proxy configs
 
 > No app-code changes — this was all deployment infrastructure on the shared VPS (`76.13.220.161`), which hosts **three** Laravel projects behind one Docker nginx proxy: labsync (`AVILA/labsync`), hulagway (`SABACAHAN/hulagway-backend`), and LuxMap/SOMS here, plus the student PWA on Vercel. New **`DEPLOYMENT.md`** (repo root) is the orientation doc; runbook fixes in `deploy/setup-vps.md`.
 
