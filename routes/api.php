@@ -99,6 +99,8 @@ Route::name('api.')->group(function () {
         Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
         Route::put('/notifications/push-token', [NotificationController::class, 'updatePushToken'])->name('notifications.push-token');
         Route::delete('/notifications/push-subscription', [NotificationController::class, 'removePushSubscription'])->name('notifications.push-subscription');
+        Route::delete('/notifications', [NotificationController::class, 'clear'])->name('notifications.clear');
+        Route::delete('/notifications/{id}', [NotificationController::class, 'destroy'])->where('id', '[0-9a-fA-F\-]{36}')->name('notifications.destroy');
 
         // Reports
         Route::get('/reports/attendance', [ReportController::class, 'attendance'])->name('reports.attendance');

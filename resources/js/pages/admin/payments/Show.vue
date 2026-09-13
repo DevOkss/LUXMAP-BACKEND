@@ -37,11 +37,13 @@ interface TransactionBatch {
     payment_method?: string | null;
     reference_number: string | null;
     paid_at?: string | null;
+    verified_at?: string | null;
     exempted_at?: string | null;
     created_at?: string | null;
     notes?: string | null;
     exemptedBy?: { id: number; name: string } | null;
     processedBy?: { id: number; name: string } | null;
+    verifiedBy?: { id: number; name: string } | null;
     receipts?: BatchReceipt[];
     items: BatchItem[];
 }
@@ -151,7 +153,12 @@ function numberToWords(value: number): string {
     if (thousand) out += `${threeDigits(thousand)} Thousand `;
     if (remainder) out += threeDigits(remainder);
     out = out.trim() || 'Zero';
-    out += ` Pesos and ${String(cents).padStart(2, '0')}/100`;
+    const pesoWord = whole === 1 ? 'Peso' : 'Pesos';
+    out += ` ${pesoWord}`;
+    if (cents > 0) {
+        const centWord = cents === 1 ? 'Centavo' : 'Centavos';
+        out += ` and ${twoDigits(cents)} ${centWord}`;
+    }
     return out;
 }
 </script>
@@ -239,6 +246,10 @@ function numberToWords(value: number): string {
                             </table>
 
                             <p class="mt-4 text-xs italic text-muted-foreground">{{ numberToWords(batch.isExempted ? 0 : batch.total) }} Only</p>
+                            <p v-if="!batch.isExempted && (batch.processedBy || batch.verifiedBy)" class="mt-2 text-xs text-muted-foreground">
+                                Processed by <span class="font-medium text-foreground">{{ (batch.processedBy || batch.verifiedBy)?.name }}</span>
+                                <span v-if="batch.verified_at || batch.paid_at"> on {{ formatDate(batch.verified_at || batch.paid_at) }}</span>
+                            </p>
                         </div>
 
                         <div

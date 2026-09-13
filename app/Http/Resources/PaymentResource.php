@@ -113,7 +113,22 @@ class PaymentResource extends JsonResource
                 'id' => $this->receipt->id,
                 'receipt_number' => $this->receipt->receipt_number,
                 'issued_at' => $this->receipt->issued_at,
+                'issued_by' => $this->receipt->relationLoaded('issuedBy') && $this->receipt->issuedBy
+                    ? ['id' => $this->receipt->issuedBy->id, 'name' => $this->receipt->issuedBy->name]
+                    : null,
             ]),
+            'processedBy' => $this->when($this->relationLoaded('processedBy') && $this->processedBy, fn() => [
+                'id' => $this->processedBy->id,
+                'name' => $this->processedBy->name,
+            ]),
+            'exemptedBy' => $this->when($this->relationLoaded('exemptedBy') && $this->exemptedBy, fn() => [
+                'id' => $this->exemptedBy->id,
+                'name' => $this->exemptedBy->name,
+            ]),
+            'verifiedBy' => $this->when(
+                $this->relationLoaded('submission') && $this->submission && $this->submission->relationLoaded('verifiedBy') && $this->submission->verifiedBy,
+                fn() => ['id' => $this->submission->verifiedBy->id, 'name' => $this->submission->verifiedBy->name]
+            ),
         ];
     }
 }

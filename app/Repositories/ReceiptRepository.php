@@ -13,14 +13,14 @@ class ReceiptRepository
 
     public function all(): Collection
     {
-        return $this->model->with(['payment', 'issuedBy'])
+        return $this->model->with(['payment.user', 'payment.organization', 'payment.processedBy', 'payment.exemptedBy', 'payment.submission.verifiedBy', 'issuedBy'])
             ->orderBy('created_at', 'desc')
             ->get();
     }
 
     public function allForUser(int $userId): Collection
     {
-        return $this->model->with(['payment', 'issuedBy'])
+        return $this->model->with(['payment.user', 'payment.organization', 'payment.processedBy', 'payment.exemptedBy', 'payment.submission.verifiedBy', 'issuedBy'])
             ->whereHas('payment', fn ($query) => $query->where('user_id', $userId))
             ->orderBy('created_at', 'desc')
             ->get();
@@ -28,7 +28,7 @@ class ReceiptRepository
 
     public function find(int $id): ?Receipt
     {
-        return $this->model->with(['payment.user', 'payment.organization', 'issuedBy'])->find($id);
+        return $this->model->with(['payment.user', 'payment.organization', 'payment.processedBy', 'payment.exemptedBy', 'payment.submission.verifiedBy', 'issuedBy'])->find($id);
     }
 
     public function findByPayment(int $paymentId): ?Receipt

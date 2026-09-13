@@ -75,7 +75,7 @@ class PaymentRepository
 
     private function query(array $filters): Builder
     {
-        $query = $this->model->with(['user', 'organization', 'academicTerm', 'fee', 'receipt', 'event', 'exemptedBy', 'event.organization']);
+        $query = $this->model->with(['user', 'organization', 'academicTerm', 'fee', 'receipt', 'receipt.issuedBy', 'event', 'exemptedBy', 'processedBy', 'submission.verifiedBy', 'event.organization']);
 
         if (! empty($filters['organization_id'])) {
             $query->where('organization_id', $filters['organization_id']);
@@ -115,12 +115,12 @@ class PaymentRepository
 
     public function find(int $id): ?Payment
     {
-        return $this->model->with(['user', 'organization', 'academicTerm', 'fee', 'receipt', 'event', 'exemptedBy', 'event.organization'])->find($id);
+        return $this->model->with(['user', 'organization', 'academicTerm', 'fee', 'receipt', 'receipt.issuedBy', 'event', 'exemptedBy', 'processedBy', 'submission.verifiedBy', 'event.organization'])->find($id);
     }
 
     public function findByUuid(string $uuid): ?Payment
     {
-        return $this->model->with(['user', 'organization', 'academicTerm', 'fee', 'receipt', 'event', 'exemptedBy', 'processedBy', 'event.organization'])->where('uuid', $uuid)->first();
+        return $this->model->with(['user', 'organization', 'academicTerm', 'fee', 'receipt', 'receipt.issuedBy', 'event', 'exemptedBy', 'processedBy', 'submission.verifiedBy', 'event.organization'])->where('uuid', $uuid)->first();
     }
 
     public function create(array $data): Payment
@@ -140,7 +140,7 @@ class PaymentRepository
 
     public function findByUser(int $userId): Collection
     {
-        return $this->model->with(['organization', 'academicTerm', 'fee', 'receipt', 'event'])
+        return $this->model->with(['organization', 'academicTerm', 'fee', 'receipt', 'receipt.issuedBy', 'event', 'processedBy', 'exemptedBy', 'submission.verifiedBy'])
             ->where('user_id', $userId)
             ->orderBy('created_at', 'desc')
             ->get();

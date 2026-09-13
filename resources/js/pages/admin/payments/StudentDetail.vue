@@ -189,6 +189,13 @@ function submitExempt() {
                             <div class="rounded-lg border border-dashed p-4 text-sm">
                                 <p class="font-medium">{{ feeAccount().account_name }}</p>
                                 <p class="text-muted-foreground">{{ feeAccount().account_provider || 'Your' }} account · {{ feeAccount().account_number }}</p>
+                                <p class="mt-1 text-xs text-muted-foreground">Walk-in cash does not require an online payment account — this account is for cashless submissions.</p>
+                            </div>
+                        </template>
+                        <template v-else>
+                            <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-900/20">
+                                <p class="font-medium text-amber-800 dark:text-amber-200">No online payment account for this organization</p>
+                                <p class="text-amber-700 dark:text-amber-300">Walk-in cash payments are still available — officers can record cash for their scoped organization without an online recipient account.</p>
                             </div>
                         </template>
 

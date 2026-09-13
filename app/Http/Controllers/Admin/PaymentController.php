@@ -489,6 +489,8 @@ class PaymentController extends Controller
             'payment_channel' => $first->payment_channel,
             'receipt_image_url' => $first->receipt_image ? Storage::url($first->receipt_image) : null,
             'submitted_at' => $first->created_at,
+            'verified_at' => $first->verified_at?->toISOString(),
+            'verifiedBy' => $first->verifiedBy ? ['id' => $first->verifiedBy->id, 'name' => $first->verifiedBy->name] : null,
             'academic_term' => $first->academicTerm?->displayName(),
             'organization' => $first->organization ? ['id' => $first->organization->id, 'name' => $first->organization->name] : null,
             'student' => $first->user ? ['id' => $first->user->id, 'name' => $first->user->name, 'student_number' => $first->user->student_number] : null,
@@ -542,6 +544,8 @@ class PaymentController extends Controller
             $last = $rows->last();
             $anyExempted = $rows->contains(fn (Payment $p) => (bool) $p->isExempted);
             $exemptedRow = $rows->first(fn (Payment $p) => (bool) $p->isExempted);
+            $processed = $first->processedBy ?: $first->submission?->verifiedBy;
+            $exempted = $exemptedRow?->exemptedBy;
 
             return [
                 'batch_id' => $first->batch_id,
@@ -561,6 +565,8 @@ class PaymentController extends Controller
                 'academic_term' => $first->academicTerm?->displayName(),
                 'user' => $first->user ? ['id' => $first->user->id, 'name' => $first->user->name, 'student_number' => $first->user->student_number] : null,
                 'organization' => $first->organization ? ['id' => $first->organization->id, 'name' => $first->organization->name] : null,
+                'processedBy' => $processed ? ['id' => $processed->id, 'name' => $processed->name] : null,
+                'exemptedBy' => $exempted ? ['id' => $exempted->id, 'name' => $exempted->name] : null,
                 'items' => $rows->map(fn (Payment $p) => [
                     'fee_type' => $p->fee_type,
                     'amount' => (float) $p->amount,
@@ -584,6 +590,9 @@ class PaymentController extends Controller
         $anyExempted = $rows->contains(fn (Payment $p) => (bool) $p->isExempted);
         $exemptedRow = $rows->first(fn (Payment $p) => (bool) $p->isExempted);
 
+        $processed = $first->processedBy ?: $first->submission?->verifiedBy;
+        $verifiedAt = $rows->filter(fn (Payment $p) => $p->submission?->verified_at)->max(fn (Payment $p) => $p->submission->verified_at)?->toISOString() ?? $rows->filter(fn (Payment $p) => $p->paid_at)->max('paid_at')?->toISOString();
+
         return [
             'batch_id' => $anchor->batch_id,
             'uuid' => $anchor->uuid,
@@ -596,11 +605,13 @@ class PaymentController extends Controller
             'payment_method' => $first->payment_method,
             'reference_number' => $first->reference_number,
             'paid_at' => $rows->filter(fn (Payment $p) => $p->paid_at)->max('paid_at')?->toISOString(),
+            'verified_at' => $verifiedAt,
             'exempted_at' => $exemptedRow?->exempted_at?->toISOString(),
             'created_at' => $first->created_at?->toISOString(),
             'notes' => $exemptedRow?->notes,
             'exemptedBy' => $exemptedRow?->exemptedBy ? ['id' => $exemptedRow->exemptedBy->id, 'name' => $exemptedRow->exemptedBy->name] : null,
-            'processedBy' => $first->processedBy ? ['id' => $first->processedBy->id, 'name' => $first->processedBy->name] : null,
+            'processedBy' => $processed ? ['id' => $processed->id, 'name' => $processed->name] : null,
+            'verifiedBy' => $processed ? ['id' => $processed->id, 'name' => $processed->name] : null,
             'receipts' => $rows->filter(fn (Payment $p) => $p->receipt)
                 ->map(fn (Payment $p) => [
                     'id' => $p->receipt->id,

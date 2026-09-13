@@ -102,20 +102,22 @@ class PaymentController extends Controller
         $groups = $this->submissions->userGroups($request->user());
 
         $payload = $groups->map(function ($rows) {
+            $first = $rows->first();
             $group = [
-                'group_key' => $rows->first()->group_key,
-                'status' => $rows->first()->status,
-                'rejection_reason' => $rows->first()->rejection_reason,
-                'reference_number' => $rows->first()->reference_number,
-                'receipt_image_url' => $rows->first()->receipt_image ? '/storage/'.$rows->first()->receipt_image : null,
-                'payment_channel' => $rows->first()->payment_channel,
-                'organization' => $rows->first()->organization ? [
-                    'id' => $rows->first()->organization->id,
-                    'name' => $rows->first()->organization->name,
+                'group_key' => $first->group_key,
+                'status' => $first->status,
+                'rejection_reason' => $first->rejection_reason,
+                'reference_number' => $first->reference_number,
+                'receipt_image_url' => $first->receipt_image ? '/storage/'.$first->receipt_image : null,
+                'payment_channel' => $first->payment_channel,
+                'organization' => $first->organization ? [
+                    'id' => $first->organization->id,
+                    'name' => $first->organization->name,
                 ] : null,
-                'academic_term' => $rows->first()->academicTerm?->displayName(),
-                'verified_at' => $rows->first()->verified_at,
-                'submitted_at' => $rows->first()->created_at,
+                'academic_term' => $first->academicTerm?->displayName(),
+                'verified_at' => $first->verified_at,
+                'verified_by' => $first->verifiedBy ? ['id' => $first->verifiedBy->id, 'name' => $first->verifiedBy->name] : null,
+                'submitted_at' => $first->created_at,
                 'items' => $rows->map(fn ($row) => [
                     'fee_type' => $row->fee_type,
                     'amount' => (float) $row->amount,
@@ -143,16 +145,19 @@ class PaymentController extends Controller
             return response()->json(['message' => 'Submission not found'], 404);
         }
 
+        $first = $rows->first();
+
         return response()->json([
-            'group_key' => $rows->first()->group_key,
-            'status' => $rows->first()->status,
-            'rejection_reason' => $rows->first()->rejection_reason,
-            'reference_number' => $rows->first()->reference_number,
-            'receipt_image_url' => $rows->first()->receipt_image ? '/storage/'.$rows->first()->receipt_image : null,
-            'organization' => $rows->first()->organization ? ['id' => $rows->first()->organization->id, 'name' => $rows->first()->organization->name] : null,
-            'academic_term' => $rows->first()->academicTerm?->displayName(),
-            'verified_at' => $rows->first()->verified_at,
-            'submitted_at' => $rows->first()->created_at,
+            'group_key' => $first->group_key,
+            'status' => $first->status,
+            'rejection_reason' => $first->rejection_reason,
+            'reference_number' => $first->reference_number,
+            'receipt_image_url' => $first->receipt_image ? '/storage/'.$first->receipt_image : null,
+            'organization' => $first->organization ? ['id' => $first->organization->id, 'name' => $first->organization->name] : null,
+            'academic_term' => $first->academicTerm?->displayName(),
+            'verified_at' => $first->verified_at,
+            'verified_by' => $first->verifiedBy ? ['id' => $first->verifiedBy->id, 'name' => $first->verifiedBy->name] : null,
+            'submitted_at' => $first->created_at,
             'items' => $rows->map(fn ($row) => [
                 'fee_type' => $row->fee_type,
                 'amount' => (float) $row->amount,

@@ -49,6 +49,16 @@ class NotificationService
         return $user->unreadNotifications()->update(['read_at' => now()]);
     }
 
+    public function delete(User $user, string $id): bool
+    {
+        return $user->notifications()->where('id', $id)->delete() > 0;
+    }
+
+    public function clearAll(User $user): int
+    {
+        return $user->notifications()->delete();
+    }
+
     public function updatePushSubscription(User $user, array $subscription): User
     {
         $user->pushSubscriptions()->updateOrCreate(

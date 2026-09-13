@@ -247,6 +247,10 @@ Route::middleware(['auth', 'verified', "role:{$adminRoles}"])->name('admin.')->p
         ->name('notifications.read');
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])
         ->name('notifications.read-all');
+    Route::delete('/notifications', [NotificationController::class, 'clear'])
+        ->name('notifications.clear');
+    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy'])
+        ->name('notifications.destroy');
 
     // One-device binding — super admin only (per latest requirement).
     Route::middleware('role:super_admin')->group(function () {

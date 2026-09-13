@@ -21,6 +21,7 @@ class ReceiptResource extends JsonResource
                 'payment_method' => $this->payment->payment_method,
                 'status' => $this->payment->status,
                 'paid_at' => $this->payment->paid_at,
+                'isExempted' => (bool) $this->payment->isExempted,
                 'user' => $this->payment->user ? [
                     'id' => $this->payment->user->id,
                     'name' => $this->payment->user->name,
@@ -30,6 +31,15 @@ class ReceiptResource extends JsonResource
                     'id' => $this->payment->organization->id,
                     'name' => $this->payment->organization->name,
                 ] : null,
+                'processedBy' => $this->payment->relationLoaded('processedBy') && $this->payment->processedBy
+                    ? ['id' => $this->payment->processedBy->id, 'name' => $this->payment->processedBy->name]
+                    : null,
+                'exemptedBy' => $this->payment->relationLoaded('exemptedBy') && $this->payment->exemptedBy
+                    ? ['id' => $this->payment->exemptedBy->id, 'name' => $this->payment->exemptedBy->name]
+                    : null,
+                'verifiedBy' => $this->payment->relationLoaded('submission') && $this->payment->submission && $this->payment->submission->relationLoaded('verifiedBy') && $this->payment->submission->verifiedBy
+                    ? ['id' => $this->payment->submission->verifiedBy->id, 'name' => $this->payment->submission->verifiedBy->name]
+                    : null,
             ]),
             'issued_by' => $this->when($this->relationLoaded('issuedBy') && $this->issuedBy, fn() => [
                 'id' => $this->issuedBy->id,

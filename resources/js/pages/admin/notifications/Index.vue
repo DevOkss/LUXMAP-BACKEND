@@ -5,7 +5,7 @@ import { type BreadcrumbItem } from '@/types'
 import { Head, router } from '@inertiajs/vue3'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { CheckCheck } from 'lucide-vue-next'
+import { CheckCheck, Trash2, Trash } from 'lucide-vue-next'
 
 interface Notification {
     id: string
@@ -33,6 +33,16 @@ function markRead(id: string) {
 function markAllRead() {
     router.post('/admin/notifications/read-all')
 }
+
+function deleteNotification(id: string) {
+    if (!confirm('Delete this notification?')) return
+    router.delete(`/admin/notifications/${id}`, { preserveScroll: true })
+}
+
+function deleteAll() {
+    if (!confirm('Delete all notifications? This cannot be undone.')) return
+    router.delete('/admin/notifications', { preserveScroll: true })
+}
 </script>
 
 <template>
@@ -42,10 +52,16 @@ function markAllRead() {
         <div class="flex flex-1 flex-col gap-6">
             <PageHeader title="Logs" subtitle="All the latest updates for your account.">
                 <template #actions>
-                    <Button v-if="unread_count > 0" variant="outline" @click="markAllRead">
-                        <CheckCheck class="size-4" />
-                        Mark All Read
-                    </Button>
+                    <div class="flex gap-2">
+                        <Button v-if="unread_count > 0" variant="outline" @click="markAllRead">
+                            <CheckCheck class="size-4" />
+                            Mark All Read
+                        </Button>
+                        <Button v-if="notifications.length > 0" variant="outline" @click="deleteAll">
+                            <Trash class="size-4" />
+                            Delete All
+                        </Button>
+                    </div>
                 </template>
             </PageHeader>
 
@@ -74,7 +90,12 @@ function markAllRead() {
                                 <p class="mt-1 text-sm text-muted-foreground">{{ n.body }}</p>
                                 <p class="mt-1 text-xs text-muted-foreground">{{ new Date(n.created_at).toLocaleString() }}</p>
                             </div>
-                            <button v-if="!n.is_read" @click="markRead(n.id)" class="shrink-0 text-xs font-medium text-primary hover:underline">Mark read</button>
+                            <div class="flex shrink-0 items-center gap-2">
+                                <button v-if="!n.is_read" @click="markRead(n.id)" class="text-xs font-medium text-primary hover:underline">Mark read</button>
+                                <button @click="deleteNotification(n.id)" class="inline-flex items-center gap-1 text-xs font-medium text-destructive hover:underline">
+                                    <Trash2 class="size-3" /> Delete
+                                </button>
+                            </div>
                         </li>
                     </ul>
                 </CardContent>
