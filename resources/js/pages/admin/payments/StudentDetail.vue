@@ -4,6 +4,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import { type BreadcrumbItem } from '@/types'
 import { Head, useForm } from '@inertiajs/vue3'
 import { Card, CardContent } from '@/components/ui/card'
+import { computed } from 'vue'
 
 interface FeeObligation {
     id: number
@@ -90,7 +91,7 @@ const totals = () => {
     return fees + penalties
 }
 
-const feeAccount = () => props.organizations.find((o) => o.id === cashForm.organization_id)?.payment_account || null
+const feeAccount = computed(() => props.organizations.find((o) => o.id === cashForm.organization_id)?.payment_account || null)
 
 function submitCash() {
     cashForm.post('/admin/payments/cash', { preserveScroll: true })
@@ -187,8 +188,8 @@ function submitExempt() {
 
                         <template v-if="feeAccount">
                             <div class="rounded-lg border border-dashed p-4 text-sm">
-                                <p class="font-medium">{{ feeAccount().account_name }}</p>
-                                <p class="text-muted-foreground">{{ feeAccount().account_provider || 'Your' }} account · {{ feeAccount().account_number }}</p>
+                                <p class="font-medium">{{ feeAccount.account_name }}</p>
+                                <p class="text-muted-foreground">{{ feeAccount.account_provider || 'Your' }} account · {{ feeAccount.account_number }}</p>
                                 <p class="mt-1 text-xs text-muted-foreground">Walk-in cash does not require an online payment account — this account is for cashless submissions.</p>
                             </div>
                         </template>
