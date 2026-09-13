@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Enums\OrganizationType;
+use App\Enums\UserRole;
 use App\Models\AcademicTerm;
 use App\Models\Event;
 use App\Models\Organization;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -105,6 +107,8 @@ class EligibilityService
                     ->where('student_enrollments.is_enrolled', true);
             });
 
+        $query = $this->excludeStaff($query);
+
         if ($organization->type === OrganizationType::ISC && $organization->institute_id) {
             $query->where('student_enrollments.institute_id', $organization->institute_id);
         } elseif ($organization->type === OrganizationType::SRO && $organization->program_id) {
@@ -125,6 +129,8 @@ class EligibilityService
             ->where('is_enrolled', true)
             ->whereNull('deleted_at');
 
+        $query = $this->excludeStaff($query);
+
         if ($organization->type === OrganizationType::ISC && $organization->institute_id) {
             $query->where('institute_id', $organization->institute_id);
         } elseif ($organization->type === OrganizationType::SRO && $organization->program_id) {
@@ -137,5 +143,23 @@ class EligibilityService
         }
 
         return $query->pluck('id')->map(fn ($id) => (int) $id);
+    }
+
+    /**
+     * Heads, officers and advisers are staff — even when they carry an
+     * enrollment row they are not "students" for eligibility purposes: they
+     * must never owe org fees/penalties nor appear in student-facing
+     * monitoring lists (Payments Outstanding, dashboard counts, QR
+     * requirements). Officers still receive org notifications via the
+     * explicit officer union in NotificationService::recipientsForOrganization.
+     */
+    private function excludeStaff(Builder $query): Builder
+    {
+        $staff = array_map(
+            fn (UserRole $r) => $r->value,
+            array_merge(UserRole::officerRoles(), [UserRole::SUPER_ADMIN])
+        );
+
+        return $query->whereDoesntHave('organizations', fn (Builder $q) => $q->whereIn('organization_user.role', $staff));
     }
 }

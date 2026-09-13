@@ -294,6 +294,106 @@ test('outstanding aggregates balances across all enrolled students in scope and 
             ->where('outstanding_total', 1000));
 });
 
+test('outstanding lists only students — enrolled heads and officers are excluded', function () {
+    $ssc = Organization::where('code', 'SSC')->firstOrFail();
+    $term = AcademicTerm::factory()->create(['is_active' => true]);
+    $officer = adminPaymentsUser('SSC', UserRole::SSC_OFFICER);
+
+    $student = adminPaymentsStudent();
+    $student->update(['student_number' => '2026-1111']);
+    StudentEnrollment::create([
+        'user_id' => $student->id,
+        'academic_term_id' => $term->id,
+        'institute_id' => null,
+        'program_id' => null,
+        'year_level' => 1,
+        'is_enrolled' => true,
+    ]);
+
+    // Staff who also carry an enrollment row must NOT appear as students.
+    foreach ([UserRole::SSC_HEAD->value, UserRole::INSTITUTE_HEAD->value, UserRole::SRO_HEAD->value] as $i => $role) {
+        $staff = User::factory()->create(['student_number' => '9'.$i]);
+        $staff->organizations()->attach($ssc->id, ['role' => $role, 'position' => $role, 'assigned_at' => now()]);
+        StudentEnrollment::create([
+            'user_id' => $staff->id,
+            'academic_term_id' => $term->id,
+            'institute_id' => null,
+            'program_id' => null,
+            'year_level' => 1,
+            'is_enrolled' => true,
+        ]);
+    }
+
+    Fee::create([
+        'organization_id' => $ssc->id,
+        'academic_term_id' => $term->id,
+        'name' => 'SSC Membership',
+        'amount' => 500,
+        'term' => $term->displayName(),
+        'required_years' => ['all'],
+        'due_date' => now()->addMonth(),
+        'status' => 'posted',
+    ]);
+
+    $this->actingAs($officer)->get('/admin/payments?tab=outstanding')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('admin/payments/Index')
+            ->has('outstanding.students', 1)
+            ->where('outstanding.students.0.student_number', '2026-1111'));
+});
+
+test('officers record walk-in cash payments without any payment account configured', function () {
+    $ssc = Organization::where('code', 'SSC')->firstOrFail();
+    $term = AcademicTerm::factory()->create(['is_active' => true]);
+    $officer = adminPaymentsUser('SSC', UserRole::SSC_OFFICER);
+    $student = adminPaymentsStudent();
+
+    StudentEnrollment::create([
+        'user_id' => $student->id,
+        'academic_term_id' => $term->id,
+        'institute_id' => null,
+        'program_id' => null,
+        'year_level' => 1,
+        'is_enrolled' => true,
+    ]);
+
+    $fee = Fee::create([
+        'organization_id' => $ssc->id,
+        'academic_term_id' => $term->id,
+        'name' => 'SSC Membership',
+        'amount' => 550,
+        'term' => $term->displayName(),
+        'required_years' => ['all'],
+        'due_date' => now()->addMonth(),
+        'status' => 'posted',
+    ]);
+
+    expect(\App\Models\PaymentAccount::where('organization_id', $ssc->id)->exists())->toBeFalse();
+
+    // The obligations page still shows the fee + lets the officer process.
+    $this->actingAs($officer)->get('/admin/payments/students/'.$student->id.'/obligations')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('admin/payments/StudentDetail')
+            ->where('can_process', true)
+            ->has('fees', 1)
+            ->where('organizations.0.payment_account', null));
+
+    $this->actingAs($officer)->post('/admin/payments/cash', [
+        'user_id' => $student->id,
+        'organization_id' => $ssc->id,
+        'fee_ids' => [$fee->id],
+        'notes' => 'Walk-in counter.',
+    ])->assertRedirect();
+
+    $payment = Payment::where('user_id', $student->id)->where('fee_id', $fee->id)->firstOrFail();
+    expect($payment->payment_method)->toBe(Payment::METHOD_CASH)
+        ->and($payment->status)->toBe(Payment::STATUS_PAID)
+        ->and($payment->processed_by)->toBe($officer->id);
+    expect($payment->receipt)->not->toBeNull();
+});
+
 test('transactions total excludes waived (exempted) amounts', function () {
     $ssc = Organization::where('code', 'SSC')->firstOrFail();
     $term = AcademicTerm::factory()->create(['is_active' => true]);
