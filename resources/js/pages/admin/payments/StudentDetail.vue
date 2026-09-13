@@ -84,9 +84,11 @@ const exemptForm = useForm({
 })
 
 const totals = () => {
-    const fees = props.fees.reduce((s, f) => s + (f.organization?.id === cashForm.organization_id ? f.amount : 0), 0)
+    const fees = props.fees
+        .filter((f) => f.organization?.id === cashForm.organization_id && cashForm.fee_ids.includes(f.id))
+        .reduce((s, f) => s + f.amount, 0)
     const penalties = props.penalties
-        .filter((p) => (p.event?.organization?.id ?? p.event?.org?.id) === cashForm.organization_id)
+        .filter((p) => (p.event?.organization?.id ?? p.event?.org?.id) === cashForm.organization_id && cashForm.event_ids.includes(p.event_id))
         .reduce((s, p) => s + p.amount, 0)
     return fees + penalties
 }
