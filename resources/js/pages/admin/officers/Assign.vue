@@ -25,8 +25,16 @@ interface SearchUser {
     student_number: string | null
 }
 
-defineProps<{
+interface AcademicTermOption {
+    id: number
+    name: string
+    is_active: boolean
+}
+
+const props = defineProps<{
     target: Target | null
+    academic_terms: AcademicTermOption[]
+    selected_term: number | null
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -38,6 +46,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 const form = useForm({
     user_id: '',
     position: '',
+    academic_term_id: props.selected_term ?? props.academic_terms.find((t) => t.is_active)?.id ?? null,
 })
 
 const query = ref('')
@@ -126,6 +135,21 @@ const submit = () => {
                             <span class="text-muted-foreground">Assigning to</span>
                             <span class="ml-2 font-medium">{{ target.name }}</span>
                             <span class="ml-1 text-xs text-muted-foreground">({{ target.code }})</span>
+                        </div>
+
+                        <div class="space-y-2">
+                            <Label for="academic_term_id">Academic Term</Label>
+                            <select
+                                id="academic_term_id"
+                                v-model="form.academic_term_id"
+                                class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                                <option v-for="term in props.academic_terms" :key="term.id" :value="term.id">
+                                    {{ term.name }}{{ term.is_active ? ' (current)' : '' }}
+                                </option>
+                            </select>
+                            <p class="text-xs text-muted-foreground">Officer will be active only for the selected term. Same officer can be assigned to different terms separately; previous terms are preserved.</p>
+                            <InputError :message="form.errors.academic_term_id" />
                         </div>
 
                         <div class="space-y-2">

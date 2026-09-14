@@ -21,6 +21,7 @@ interface CurrentTerm {
     name: string;
     start_date: string | null;
     end_date: string | null;
+    is_active?: boolean | null;
 }
 
 interface OrgShape {
@@ -71,6 +72,7 @@ const props = defineProps<{
     terms: TermOption[];
     selected_term: number | null;
     current_term: CurrentTerm | null;
+    active_term_id?: number | null;
     scope_orgs: OrgShape[];
     income_chart: IncomeDatum[];
     income_breakdown: { fees: number; penalties: number };
@@ -207,9 +209,12 @@ const statusColors: Record<string, string> = {
                     </div>
 
                     <div class="flex shrink-0 items-center gap-4">
-                        <span class="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold ring-1 ring-white/25">
-                            <span class="size-1.5 rounded-full bg-emerald-300" />
-                            Active
+                        <span
+                            class="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold ring-1 ring-white/25"
+                            :class="props.current_term?.is_active ? 'bg-white/15' : 'bg-white/10'"
+                        >
+                            <span class="size-1.5 rounded-full" :class="props.current_term?.is_active ? 'bg-emerald-300' : 'bg-amber-300'" />
+                            {{ props.current_term?.is_active ? 'Active' : 'Selected' }}
                         </span>
                     </div>
                 </div>

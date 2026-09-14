@@ -13,6 +13,7 @@ class OrganizationUser extends Pivot
     protected $fillable = [
         'user_id',
         'organization_id',
+        'academic_term_id',
         'role',
         'position',
         'assigned_at',
@@ -23,7 +24,13 @@ class OrganizationUser extends Pivot
         return [
             'role' => UserRole::class,
             'assigned_at' => 'datetime',
+            'academic_term_id' => 'integer',
         ];
+    }
+
+    public function academicTerm(): BelongsTo
+    {
+        return $this->belongsTo(AcademicTerm::class, 'academic_term_id');
     }
 
     public function user(): BelongsTo

@@ -33,6 +33,7 @@ interface FeeModel {
     academic_term_id: number | null;
     required_years: string[] | null;
     due_date: string | null;
+    organization?: { id: number; name: string } | null;
 }
 
 const props = defineProps<{
@@ -51,6 +52,7 @@ const years = (props.fee.required_years ?? ['all']).includes('all') ? ['1', '2',
 const termDefault = props.academic_terms.find((t) => t.is_active) || props.academic_terms[0];
 
 const form = useForm({
+    organization_id: props.fee.organization?.id ? String(props.fee.organization.id) : (props.organizations[0] ? String(props.organizations[0].id) : ''),
     name: props.fee.name,
     description: props.fee.description || '',
     amount: String(props.fee.amount),
@@ -88,6 +90,20 @@ const submit = () => {
             <Card class="max-w-2xl">
                 <CardContent class="p-6">
                     <form @submit.prevent="submit" class="flex flex-col gap-5">
+                        <div class="grid gap-2">
+                            <Label for="organization_id">Organization</Label>
+                            <select
+                                id="organization_id"
+                                v-model="form.organization_id"
+                                class="w-full rounded-xl border border-gray-300 bg-white px-5 py-3 outline-none transition focus:ring-2 focus:ring-[#20673A]"
+                            >
+                                <option v-for="org in organizations" :key="org.id" :value="String(org.id)">
+                                    {{ org.name }}
+                                </option>
+                            </select>
+                            <InputError :message="form.errors.organization_id" />
+                        </div>
+
                         <div class="grid gap-2">
                             <Label for="name">Name</Label>
                             <Input id="name" v-model="form.name" placeholder="e.g. Membership Fee" />

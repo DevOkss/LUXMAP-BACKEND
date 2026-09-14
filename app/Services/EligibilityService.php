@@ -146,20 +146,24 @@ class EligibilityService
     }
 
     /**
-     * Heads, officers and advisers are staff — even when they carry an
-     * enrollment row they are not "students" for eligibility purposes: they
-     * must never owe org fees/penalties nor appear in student-facing
-     * monitoring lists (Payments Outstanding, dashboard counts, QR
-     * requirements). Officers still receive org notifications via the
-     * explicit officer union in NotificationService::recipientsForOrganization.
+     * Heads and super admins are excluded from student eligibility — even when
+     * they carry an enrollment row they are not "students" for payment/tracking
+     * purposes: they must never owe org fees/penalties nor appear in the
+     * outstanding list. Student officers ARE included if they belong to the
+     * officer's scope and have an outstanding balance; officers still receive
+     * org notifications via the explicit officer union in
+     * NotificationService::recipientsForOrganization.
+     *
+     * This matches the updated requirement: include regular students + student
+     * officers, exclude only Heads and Superadmin regardless of officer role.
      */
     private function excludeStaff(Builder $query): Builder
     {
-        $staff = array_map(
+        $excluded = array_map(
             fn (UserRole $r) => $r->value,
-            array_merge(UserRole::officerRoles(), [UserRole::SUPER_ADMIN])
+            array_merge(UserRole::headRoles(), [UserRole::SUPER_ADMIN])
         );
 
-        return $query->whereDoesntHave('organizations', fn (Builder $q) => $q->whereIn('organization_user.role', $staff));
+        return $query->whereDoesntHave('organizations', fn (Builder $q) => $q->whereIn('organization_user.role', $excluded));
     }
 }

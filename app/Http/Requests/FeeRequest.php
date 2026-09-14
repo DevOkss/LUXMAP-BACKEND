@@ -13,8 +13,15 @@ class FeeRequest extends FormRequest
 
     public function rules(): array
     {
+        // On update (PUT/PATCH) the organization is unchanged unless the form
+        // explicitly sends it, so only validate it when present. On create
+        // (POST) it is always required.
+        $organizationRule = $this->isMethod('put') || $this->isMethod('patch')
+            ? ['sometimes', 'required', 'exists:organizations,id']
+            : ['required', 'exists:organizations,id'];
+
         return [
-            'organization_id' => ['required', 'exists:organizations,id'],
+            'organization_id' => $organizationRule,
             'academic_term_id' => ['nullable', 'exists:academic_terms,id'],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],

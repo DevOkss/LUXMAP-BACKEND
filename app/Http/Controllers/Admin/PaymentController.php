@@ -47,10 +47,9 @@ class PaymentController extends Controller
     {
         $user = $request->user();
         $tab = $request->query('tab', 'transactions');
-        $orgIds = $this->accessScope->scopeOrganizationIds($user);
-
         $term = $this->resolveTerm((int) $request->query('academic_term_id', 0))
             ?? $this->terms->current();
+        $orgIds = $this->accessScope->scopeOrganizationIds($user, $term);
 
         $page = max(1, (int) $request->query('page', 1));
         $perPage = (int) $request->query('per_page', 30);
@@ -113,8 +112,9 @@ class PaymentController extends Controller
      */
     public function export(Request $request): StreamedResponse
     {
+        $term = $this->resolveTerm((int) $request->query('academic_term_id', 0)) ?? $this->terms->current();
         $filters = [
-            'organization_ids' => $this->accessScope->scopeOrganizationIds($request->user()),
+            'organization_ids' => $this->accessScope->scopeOrganizationIds($request->user(), $term),
             'academic_term_id' => (int) $request->query('academic_term_id', 0) ?: null,            'include_fees' => filter_var($request->query('include_fees', true), FILTER_VALIDATE_BOOLEAN),
             'include_penalties' => filter_var($request->query('include_penalties', true), FILTER_VALIDATE_BOOLEAN),
             'fee_ids' => $this->parseIdList($request->query('fee_ids')),
@@ -174,20 +174,20 @@ class PaymentController extends Controller
     public function studentDetail(Request $request, int $userId)
     {
         $user = $request->user();
-        $orgIds = $this->accessScope->scopeOrganizationIds($user);
+        $term = $this->terms->current();
+        $orgIds = $this->accessScope->scopeOrganizationIds($user, $term);
 
         $student = User::find($userId);
         if (! $student) {
             return redirect()->route('admin.payments.index')->with('error', 'Student not found.');
         }
 
-        $term = $this->terms->current();
         $data = $this->obligations->forUser($student, null, $term);
 
         $fees = $data['fees']->filter(fn ($fee) => in_array($fee['organization']['id'] ?? null, $orgIds, true))->values();
         $penalties = $data['penalties']->filter(fn ($pen) => in_array($pen['event']['organization']['id'] ?? null, $orgIds, true))->values();
 
-        $organizations = $this->scopedOrganizations($user)->map(fn (Organization $org) => [
+        $organizations = $this->scopedOrganizations($user, $term)->map(fn (Organization $org) => [
             'id' => $org->id,
             'name' => $org->name,
             'type' => $org->type,
@@ -215,10 +215,10 @@ class PaymentController extends Controller
     {
         $user = $request->user();
         $org = Organization::findOrFail($request->input('organization_id'));
-        $this->authorizeProcessor($user, $org);
+        $term = $this->terms->current();
+        $this->authorizeProcessor($user, $org, $term);
 
         $student = User::findOrFail($request->integer('user_id'));
-        $term = $this->terms->current();
 
         $selected = $this->obligations->verifySelected(
             $student,
@@ -246,10 +246,10 @@ class PaymentController extends Controller
     {
         $user = $request->user();
         $org = Organization::findOrFail($request->input('organization_id'));
-        $this->authorizeProcessor($user, $org);
+        $term = $this->terms->current();
+        $this->authorizeProcessor($user, $org, $term);
 
         $student = User::findOrFail($request->integer('user_id'));
-        $term = $this->terms->current();
 
         $selected = $this->obligations->verifySelected(
             $student,
@@ -280,7 +280,7 @@ class PaymentController extends Controller
             return redirect()->route('admin.payments.index')->with('error', 'Payment not found.');
         }
 
-        if ($payment->organization && ! $this->accessScope->isWithinScope($request->user(), $payment->organization)) {
+        if ($payment->organization && ! $this->accessScope->isWithinScope($request->user(), $payment->organization, $payment->academicTerm)) {
             abort(403, 'This payment is outside your scope.');
         }
 
@@ -410,9 +410,9 @@ class PaymentController extends Controller
         ];
     }
 
-    private function scopedOrganizations(User $user): Collection
+    private function scopedOrganizations(User $user, ?AcademicTerm $term = null): Collection
     {
-        return Organization::whereIn('id', $this->accessScope->scopeOrganizationIds($user))->get();
+        return Organization::whereIn('id', $this->accessScope->scopeOrganizationIds($user, $term))->get();
     }
 
     private function resolveTerm(int $academicTermId): ?AcademicTerm
@@ -444,7 +444,7 @@ class PaymentController extends Controller
         return $user->hasRole(UserRole::staffRoles());
     }
 
-    private function authorizeProcessor(User $user, Organization $org): void
+    private function authorizeProcessor(User $user, Organization $org, ?AcademicTerm $term = null): void
     {
         if ($user->isSuperAdmin()) {
             abort(403, 'Super admin is view-only for payment actions.');
@@ -457,7 +457,7 @@ class PaymentController extends Controller
             abort(403, 'You are not authorized to process payments in this organization.');
         }
 
-        if (! $this->accessScope->isWithinScope($user, $org)) {
+        if (! $this->accessScope->isWithinScope($user, $org, $term)) {
             abort(403, 'This organization is outside your scope.');
         }
     }

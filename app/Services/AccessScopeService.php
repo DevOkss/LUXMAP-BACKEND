@@ -20,14 +20,27 @@ class AccessScopeService
 {
     /**
      * Organizations the user is allowed to manage.
+     * When $term is provided, officer assignments are filtered to that term;
+     * heads (whose pivot has no term) remain visible for any term so they can
+     * manage officers across terms. Super admin sees every org regardless.
      */
-    public function scopeOrganizations(User $user): Collection
+    public function scopeOrganizations(User $user, ?\App\Models\AcademicTerm $term = null): Collection
     {
-        $pivots = $user->organizations()->get();
-
         if ($user->isSuperAdmin()) {
             return Organization::query()->get();
         }
+
+        $query = $user->organizations();
+
+        // Term-aware filtering for officer assignments
+        if ($term) {
+            $query->where(function ($q) use ($term) {
+                $q->where('organization_user.academic_term_id', $term->id)
+                  ->orWhereNull('organization_user.academic_term_id');
+            });
+        }
+
+        $pivots = $query->get();
 
         $scope = collect();
 
@@ -65,9 +78,9 @@ class AccessScopeService
      * a student's enrollment orgs grant read access (see viewableOrganizationIds)
      * but never write access.
      */
-    public function scopeOrganizationIds(User $user): array
+    public function scopeOrganizationIds(User $user, ?\App\Models\AcademicTerm $term = null): array
     {
-        return $this->scopeOrganizations($user)->pluck('id')->all();
+        return $this->scopeOrganizations($user, $term)->pluck('id')->all();
     }
 
     public function studentOrganizationIds(User $user): array
@@ -109,15 +122,16 @@ class AccessScopeService
      * IDs of all organizations the user may view, merging the manage scope
      * with the student scope (SSC + their ISC by institute + their SRO by program).
      * A user who is both an officer and a student can therefore see both.
+     * When $term is provided the manage scope is term-aware.
      */
-    public function viewableOrganizationIds(User $user): array
+    public function viewableOrganizationIds(User $user, ?\App\Models\AcademicTerm $term = null): array
     {
         if ($user->isSuperAdmin()) {
             return Organization::query()->pluck('id')->all();
         }
 
         $ids = array_merge(
-            $this->scopeOrganizations($user)->pluck('id')->all(),
+            $this->scopeOrganizations($user, $term)->pluck('id')->all(),
             $this->studentOrganizationIds($user)
         );
 
@@ -126,14 +140,16 @@ class AccessScopeService
 
     /**
      * Whether the given organization falls within the user's manage scope.
+     * When $term is provided the check is term-aware (officer must be
+     * assigned for that term).
      */
-    public function isWithinScope(User $user, Organization $organization): bool
+    public function isWithinScope(User $user, Organization $organization, ?\App\Models\AcademicTerm $term = null): bool
     {
         if ($user->isSuperAdmin()) {
             return true;
         }
 
-        return in_array($organization->id, $this->scopeOrganizationIds($user), true);
+        return in_array($organization->id, $this->scopeOrganizationIds($user, $term), true);
     }
 
     /**

@@ -30,9 +30,15 @@ class DashboardController extends Controller
     {
         $user = $request->user();
 
-        // Scope: the organizations this user directly manages (heads/officers
-        // get their own org; super admin gets every organization).
-        $scopeOrgs = $this->accessScopeService->scopeOrganizations($user);
+        $term = $this->resolveTerm((int) $request->query('academic_term_id', 0))
+            ?? $this->terms->current();
+
+        $currentTerm = $this->terms->current();
+        // The green card must track the selected term, not always the active one
+        $displayTerm = $term ?? $currentTerm;
+
+        // Scope is term-aware for officers (head/officer assignments filtered by term)
+        $scopeOrgs = $this->accessScopeService->scopeOrganizations($user, $term);
         $orgIds = $scopeOrgs->pluck('id')->all();
 
         $sessionOrgId = session('current_organization_id');
@@ -40,11 +46,6 @@ class DashboardController extends Controller
             $orgIds = [$sessionOrgId];
             $scopeOrgs = Organization::query()->whereIn('id', $orgIds)->get();
         }
-
-        $term = $this->resolveTerm((int) $request->query('academic_term_id', 0))
-            ?? $this->terms->current();
-
-        $currentTerm = $this->terms->current();
 
         // Income: only settled money (status = paid). Exemptions are the
         // amount waived instead of collected.
@@ -66,12 +67,14 @@ class DashboardController extends Controller
         return Inertia::render('admin/Dashboard/Index', [
             'terms' => $this->academicTermsForPicker(),
             'selected_term' => $term?->id ?? null,
-            'current_term' => $currentTerm ? [
-                'id' => $currentTerm->id,
-                'name' => $currentTerm->displayName(),
-                'start_date' => $currentTerm->start_date?->format('Y-m-d'),
-                'end_date' => $currentTerm->end_date?->format('Y-m-d'),
+            'current_term' => $displayTerm ? [
+                'id' => $displayTerm->id,
+                'name' => $displayTerm->displayName(),
+                'start_date' => $displayTerm->start_date?->format('Y-m-d'),
+                'end_date' => $displayTerm->end_date?->format('Y-m-d'),
+                'is_active' => $displayTerm->is_active,
             ] : null,
+            'active_term_id' => $currentTerm?->id ?? null,
             'scope_orgs' => $scopeOrgs
                 ->sortBy(fn (Organization $org) => $org->type->value)
                 ->map(fn (Organization $org) => $this->organizationShape($org))
@@ -81,7 +84,7 @@ class DashboardController extends Controller
                 'total_income' => round((float) $totalIncome, 2),
                 'exempted_amount' => round($exemptedAmount, 2),
                 'total_students' => $this->distinctStudentCount($scopeOrgs, $term),
-                'total_officers' => $this->distinctOfficerCount($scopeOrgs, $staffRoles),
+                'total_officers' => $this->distinctOfficerCount($scopeOrgs, $staffRoles, $term),
                 'pending_verifications' => PaymentSubmission::pending()
                     ->when(count($orgIds), fn ($q) => $q->whereIn('organization_id', $orgIds))
                     ->count(),
@@ -93,7 +96,7 @@ class DashboardController extends Controller
                 ->map(fn (Organization $org) => [
                     'organization' => $this->organizationShape($org),
                     'students' => $this->eligibility->studentIds($org, [], $term)->count(),
-                    'officers' => $this->officerCount($org, $staffRoles),
+                    'officers' => $this->officerCount($org, $staffRoles, $term),
                 ])
                 ->values()
                 ->all(),
@@ -205,34 +208,40 @@ class DashboardController extends Controller
         return $ids->unique()->count();
     }
 
-    private function officerCount(Organization $org, array $roles): int
+    private function officerCount(Organization $org, array $roles, ?AcademicTerm $term = null): int
     {
-        return $this->officerQuery([$org->id], $roles)->count();
+        return $this->officerQuery([$org->id], $roles, $term)->count();
     }
 
-    private function distinctOfficerCount(Collection $orgs, array $roles): int
+    private function distinctOfficerCount(Collection $orgs, array $roles, ?AcademicTerm $term = null): int
     {
         if ($orgs->isEmpty()) {
             return 0;
         }
 
-        return $this->officerQuery($orgs->pluck('id')->all(), $roles)->count();
+        return $this->officerQuery($orgs->pluck('id')->all(), $roles, $term)->count();
     }
 
     /**
      * Users holding a staff officer role in the given organizations.
      * Officers are the staff roles only (heads are not counted as their own
      * org's officers), matching the Officers management module.
+     * When $term is provided the query is term-aware (officer must be assigned
+     * for that term). Legacy rows with NULL term are treated as belonging to
+     * any term for backward compatibility (tests create officers without term).
      */
-    private function officerQuery(array $orgIds, array $roles)
+    private function officerQuery(array $orgIds, array $roles, ?AcademicTerm $term = null)
     {
         return User::query()
             ->whereNull('deleted_at')
-            ->whereIn('id', function ($query) use ($orgIds, $roles) {
+            ->whereIn('id', function ($query) use ($orgIds, $roles, $term) {
                 $query->select('user_id')
                     ->from('organization_user')
                     ->when($orgIds !== [], fn ($q) => $q->whereIn('organization_id', $orgIds))
                     ->whereIn('role', $roles)
+                    ->when($term, fn ($q) => $q->where(function ($qq) use ($term) {
+                        $qq->where('academic_term_id', $term->id)->orWhereNull('academic_term_id');
+                    }))
                     ->distinct();
             });
     }

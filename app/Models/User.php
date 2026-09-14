@@ -78,7 +78,7 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Organization::class, 'organization_user')
             ->using(OrganizationUser::class)
-            ->withPivot(['role', 'position', 'assigned_at'])
+            ->withPivot(['role', 'position', 'assigned_at', 'academic_term_id'])
             ->withTimestamps();
     }
 

@@ -111,7 +111,17 @@ class FeeController extends Controller
             abort(403);
         }
 
-        $this->feeService->update($fee->id, $request->validated());
+        $validated = $request->validated();
+
+        // If the head moves the fee to another organization, that target must
+        // also be inside their scope (prevents scope-escape via edit).
+        if (! empty($validated['organization_id']) && (int) $validated['organization_id'] !== (int) $fee->organization_id) {
+            if (! $this->accessScopeService->isWithinScope($request->user(), Organization::findOrFail($validated['organization_id']))) {
+                abort(403);
+            }
+        }
+
+        $this->feeService->update($fee->id, $validated);
 
         return redirect()->route('admin.fees.show', $fee)->with('success', 'Fee updated.');
     }
