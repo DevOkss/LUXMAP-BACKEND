@@ -1,6 +1,36 @@
 # SOMS — Laravel Admin Portal
 
-## Latest Session (September 13, 2026) — notifications delete, receipt Processed by + Centavos words, walk-in without payment account
+## Latest Session (September 14, 2026) — one receipt per batch + preview, payment/shift notifications, term-based scoping, fee edit fix
+
+> Two CI-deployed pushes, no proxy touch: `c2ea597` (one-receipt-per-batch, preview modal, payment + shift notifications) then `cafc647` (outstanding officers, dashboard term card, term-based officer assignments, fee edit fix). Both went `tests` + `linter` success → `deploy-production` success (pull → composer → `npm ci && vite build` → `migrate` → caches → `php8.3-fpm reload`). Verified live chunks `app-Dzhyhtia.css`/`app-B1O_4Bfu.js`, `luxmap`/`labsync`/`hulagway` + PWA all 200.
+
+### One payment transaction → one receipt (batch receipts)
+- **Migration** `2026_09_14_000001_add_batch_id_to_receipts`: `receipts.batch_id` (string36, indexed, backfilled from each receipt's `payments.batch_id`). `Receipt` fillable + `batchPayments()` relation (`app/Models/Receipt.php`); `ReceiptRepository::findByBatchId` guard (`app/Repositories/ReceiptRepository.php`).
+- **`PaymentService`** (`app/Services/PaymentService.php`): `recordCash`/`exemptObligations` now run in `DB::transaction` — N `Payment` rows sharing one `batch_id`, then `generateReceiptForBatch()` creates **exactly one** `Receipt` (`payment_id` = first row, `batch_id` = batch; reuses existing on retry). Cashless approvals use new `settleBatchFromSubmissions()` (`PaymentSubmissionService::approve` calls it) for the same guarantee.
+- **API**: `ReceiptResource` now returns `batch_id`, `total` (batch sum), `items` (fee breakdown) + `payments`; `PaymentResource` exposes `uuid`/`batch_id`/`created_at`. PWA History groups by `batch_id` (see `PWA-SUMMARY.md`).
+
+### Receipt preview before recording (admin)
+- **`admin/payments/StudentDetail.vue`**: `Record Cash Payment` / `Exempt / Waive` now open a **Receipt Preview modal** (student, org, term, fee table, total + amount-in-words, “one receipt for all selected fees”) instead of posting directly. `Confirm Payment` saves, `Cancel` closes with nothing saved; exempt preview requires the reason first.
+
+### Payment + shift notifications
+- **`notifyPaymentRecorded`** (`app/Services/NotificationService.php`): one notification per cash batch — `₱total`, org, date, `receipt_number`, fee list, `url: /receipts/{id}` (DB + WebPush, push failures `report()`ed without rolling back the payment).
+- **Shift requests**: `notifyShiftRequestSubmitted()` notifies all `super_admin`s (`url: /admin/shift-requests`) on student submit (`Api\ShiftRequestController::store`); `notifyShiftRequestReviewed()` notifies the student on approve/reject (`url: /shift`, includes remarks). Admin notifications controller now exposes `data`/`url` and `admin/notifications/Index.vue` rows are clickable (`markRead` + `router.visit`).
+
+### Outstanding includes student officers; dashboard card tracks selected term
+- **`EligibilityService::excludeStaff`** narrowed: drops only `headRoles + SUPER_ADMIN` (was `officerRoles + super_admin`), so **student officers appear in Outstanding** when enrolled in scope with a balance; heads/superadmin stay excluded. (Revises the Sept 13 `6aa04e8` exclusion.)
+- **Dashboard**: `$term` resolved before scope; new `$displayTerm = $term ?? $currentTerm` drives the green card (`id/name/start/end/is_active` + `active_term_id`), so the card updates with the picker; badge shows **Active** vs **Selected**. Scope + officer counts are term-aware (legacy `NULL`-term rows count for any term).
+
+### Term-based officer assignments (ISC/SSC/SRO)
+- **Migration** `2026_09_14_000002` (MySQL + SQLite safe): `organization_user.academic_term_id` FK + index, `user_id` standalone index (required before dropping the old unique, which backed the `user_id` FK), backfill officer rows to the active term, unique `(user_id,organization_id)` → `(user_id,organization_id,academic_term_id)`.
+- **`OfficerController`**: Assign form has a term picker (defaults to active term), `store` validates `academic_term_id`, rejects duplicates per user/org/term but allows the same officer across different terms, preserves prior terms; `index` filters per selected term; `destroy` revokes per-term. `AccessScopeService::scopeOrganizations/Ids/isWithinScope/viewableIds` all accept an optional term. `PaymentController`/`DashboardController` pass the selected term through.
+
+### Heads' fee edit “does nothing” — fixed
+- **Root cause**: `FeeRequest` requires `organization_id`, but `admin/fees/Edit.vue` never sent it → silent 422 with no visible error field. Fix: Edit form now includes the Organization dropdown (pre-filled from the fee), `FeeRequest` uses `sometimes|required` on PUT/PATCH (still `required` on POST), and `FeeController::update` scope-checks the *target* org on moves.
+
+### Tests
+- Full suite **325 passed (1493 assertions)**; `AdminFeesTest` 12 passed; `npm run build` clean. Temporary per-feature verification tests (batch receipts, shift notifications, term scoping) passed and were removed after verification.
+
+## Previous Session (September 13, 2026) — notifications delete, receipt Processed by + Centavos words, walk-in without payment account
 
 > Follow-up to the Sept 13 PWA push — student PWA got matching notification/delete + receipt fixes (`PWA-SUMMARY.md`). **Deployed via SSH without touching the shared proxy**: `f213b81` pulled and `deploy/deploy.sh` rerun on `76.13.220.161` (`git pull --ff-only` → `composer install` → `npm ci && vite build` → `migrate` none → `config/route/view cache` → `php8.3-fpm reload`). Verified `luxmap` new chunks `app-80Tj6Zfd.js`/`Index-D6mkC2nI.js` contain `Delete All` + `Processed by`, siblings `labsync`/`hulagway` stay 200.
 
