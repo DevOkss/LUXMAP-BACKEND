@@ -4,7 +4,9 @@ import PageHeader from '@/components/PageHeader.vue'
 import { type BreadcrumbItem } from '@/types'
 import { Head, useForm } from '@inertiajs/vue3'
 import { Card, CardContent } from '@/components/ui/card'
-import { computed } from 'vue'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { computed, ref } from 'vue'
 
 interface FeeObligation {
     id: number
@@ -83,6 +85,25 @@ const exemptForm = useForm({
     reason: '',
 })
 
+// Preview modal state — requirement: receipt preview before saving
+const showPreview = ref(false)
+const previewType = ref<'cash' | 'exempt'>('cash')
+
+const selectedFees = computed(() =>
+    props.fees.filter((f) => f.organization?.id === cashForm.organization_id && cashForm.fee_ids.includes(f.id)),
+)
+const selectedPenalties = computed(() =>
+    props.penalties.filter((p) => (p.event?.organization?.id ?? p.event?.org?.id) === cashForm.organization_id && cashForm.event_ids.includes(p.event_id)),
+)
+const previewItems = computed(() => {
+    const feeRows = selectedFees.value.map((f) => ({ label: f.name, amount: f.amount, type: 'Fee' }))
+    const penRows = selectedPenalties.value.map((p) => ({ label: p.event.title, amount: p.amount, type: 'Penalty' }))
+    return [...feeRows, ...penRows]
+})
+const previewTotal = computed(() => previewItems.value.reduce((s, r) => s + r.amount, 0))
+const previewOrg = computed(() => props.organizations.find((o) => o.id === cashForm.organization_id) || null)
+const previewDate = computed(() => new Date().toLocaleString())
+
 const totals = () => {
     const fees = props.fees
         .filter((f) => f.organization?.id === cashForm.organization_id && cashForm.fee_ids.includes(f.id))
@@ -95,15 +116,100 @@ const totals = () => {
 
 const feeAccount = computed(() => props.organizations.find((o) => o.id === cashForm.organization_id)?.payment_account || null)
 
+function openCashPreview() {
+    if (totals() <= 0) return
+    previewType.value = 'cash'
+    showPreview.value = true
+}
+function openExemptPreview() {
+    if (totals() <= 0) return
+    if (!exemptForm.reason.trim()) {
+        // Require reason to show preview for exempt
+        exemptForm.setError('reason', 'Exemption reason is required.')
+        return
+    }
+    previewType.value = 'exempt'
+    showPreview.value = true
+}
+
 function submitCash() {
+    showPreview.value = false
     cashForm.post('/admin/payments/cash', { preserveScroll: true })
 }
 
 function submitExempt() {
+    showPreview.value = false
     exemptForm.organization_id = cashForm.organization_id
     exemptForm.fee_ids = [...cashForm.fee_ids]
     exemptForm.event_ids = [...cashForm.event_ids]
     exemptForm.post('/admin/payments/exempt', { preserveScroll: true })
+}
+
+function confirmPreview() {
+    if (previewType.value === 'cash') {
+        submitCash()
+    } else {
+        submitExempt()
+    }
+}
+
+// Amount in words for preview (mirrors Show.vue)
+const TENS: string[] = ['', 'Ten', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+const ONES: string[] = [
+    '',
+    'One',
+    'Two',
+    'Three',
+    'Four',
+    'Five',
+    'Six',
+    'Seven',
+    'Eight',
+    'Nine',
+    'Ten',
+    'Eleven',
+    'Twelve',
+    'Thirteen',
+    'Fourteen',
+    'Fifteen',
+    'Sixteen',
+    'Seventeen',
+    'Eighteen',
+    'Nineteen',
+]
+function twoDigits(n: number): string {
+    if (n < 20) return ONES[n]
+    return `${TENS[Math.floor(n / 10)]}${n % 10 ? ' ' + ONES[n % 10] : ''}`
+}
+function threeDigits(n: number): string {
+    const hundreds = Math.floor(n / 100)
+    const rest = n % 100
+    let out = ''
+    if (hundreds) out += `${ONES[hundreds]} Hundred`
+    if (rest) out += `${out ? ' ' : ''}${twoDigits(rest)}`
+    return out
+}
+function numberToWords(value: number): string {
+    const amount = Math.round(value * 100)
+    const whole = Math.floor(amount / 100)
+    const cents = amount % 100
+    let out = ''
+    const billion = Math.floor(whole / 1000000000)
+    const million = Math.floor((whole % 1000000000) / 1000000)
+    const thousand = Math.floor((whole % 1000000) / 1000)
+    const remainder = whole % 1000
+    if (billion) out += `${threeDigits(billion)} Billion `
+    if (million) out += `${threeDigits(million)} Million `
+    if (thousand) out += `${threeDigits(thousand)} Thousand `
+    if (remainder) out += threeDigits(remainder)
+    out = out.trim() || 'Zero'
+    const pesoWord = whole === 1 ? 'Peso' : 'Pesos'
+    out += ` ${pesoWord}`
+    if (cents > 0) {
+        const centWord = cents === 1 ? 'Centavo' : 'Centavos'
+        out += ` and ${twoDigits(cents)} ${centWord}`
+    }
+    return out
 }
 </script>
 
@@ -170,15 +276,15 @@ function submitExempt() {
                                 type="button"
                                 :disabled="cashForm.processing || totals() <= 0"
                                 class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
-                                @click="submitCash"
+                                @click="openCashPreview"
                             >
-                                {{ cashForm.processing ? 'Recording...' : 'Record Cash Payment' }}
+                                Record Cash Payment
                             </button>
                             <button
                                 type="button"
                                 class="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
                                 :disabled="exemptForm.processing || totals() <= 0"
-                                @click="submitExempt"
+                                @click="openExemptPreview"
                             >
                                 {{ exemptForm.processing ? 'Exempting...' : 'Exempt / Waive' }}
                             </button>
@@ -214,6 +320,94 @@ function submitExempt() {
                     </div>
                 </CardContent>
             </Card>
+
+            <!-- Receipt Preview Modal — required before saving -->
+            <Dialog :open="showPreview" @update:open="(v: boolean) => (showPreview = v)">
+                <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-[620px]">
+                    <DialogHeader>
+                        <DialogTitle>Receipt Preview</DialogTitle>
+                        <DialogDescription>
+                            Review the receipt details before confirming. The payment will not be saved until you confirm.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div class="mx-auto w-full max-w-[560px] rounded-lg border border-dashed p-6 shadow-sm">
+                        <div class="flex items-start justify-between border-b pb-4">
+                            <div>
+                                <p class="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Official Receipt Preview</p>
+                                <p class="mt-1 font-mono text-sm font-semibold text-muted-foreground">Will be generated on confirmation</p>
+                                <p class="text-xs text-muted-foreground">Preview · {{ previewDate }}</p>
+                            </div>
+                            <div class="text-right text-xs text-muted-foreground">
+                                <p>Date</p>
+                                <p class="font-medium text-foreground">{{ previewDate }}</p>
+                                <p v-if="term" class="mt-1">Term</p>
+                                <p v-if="term" class="font-medium text-foreground">{{ term }}</p>
+                            </div>
+                        </div>
+
+                        <div class="border-b py-4">
+                            <div class="flex items-start justify-between gap-6">
+                                <div>
+                                    <p class="text-xs uppercase tracking-wider text-muted-foreground">Payer</p>
+                                    <p class="font-medium">{{ student.name }}</p>
+                                    <p v-if="student.student_number" class="text-xs text-muted-foreground">{{ student.student_number }}</p>
+                                    <p v-if="student.course_program" class="text-xs text-muted-foreground">{{ student.course_program }}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-xs uppercase tracking-wider text-muted-foreground">Organization</p>
+                                    <p class="font-medium">{{ previewOrg?.name || 'N/A' }}</p>
+                                    <p class="text-xs text-muted-foreground">{{ previewType === 'exempt' ? 'Exemption' : 'Cash' }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="py-4">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
+                                        <th class="pb-2 font-semibold">Description</th>
+                                        <th class="pb-2 text-right font-semibold">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(item, idx) in previewItems" :key="idx" class="border-b last:border-0">
+                                        <td class="py-2.5">
+                                            <p class="font-medium">{{ item.label }}</p>
+                                            <p class="text-xs text-muted-foreground">{{ item.type }}</p>
+                                        </td>
+                                        <td class="py-2.5 text-right font-mono">{{ previewType === 'exempt' ? '₱0.00' : `₱${item.amount.toFixed(2)}` }}</td>
+                                    </tr>
+                                    <tr v-if="previewItems.length === 0">
+                                        <td colspan="2" class="py-4 text-center text-sm text-muted-foreground">No items selected.</td>
+                                    </tr>
+                                </tbody>
+                                <tfoot>
+                                    <tr class="text-sm font-semibold">
+                                        <td class="pt-3 uppercase tracking-wider text-muted-foreground">Total ({{ previewItems.length }} {{ previewItems.length === 1 ? 'item' : 'items' }})</td>
+                                        <td class="pt-3 text-right font-mono text-base">{{ previewType === 'exempt' ? '₱0.00' : `₱${previewTotal.toFixed(2)}` }}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                            <p class="mt-4 text-xs italic text-muted-foreground">{{ numberToWords(previewType === 'exempt' ? 0 : previewTotal) }} Only</p>
+                            <p v-if="previewType === 'cash'" class="mt-2 text-xs text-muted-foreground">Processed by officer on {{ previewDate }} · One receipt will be issued for all selected fees.</p>
+                            <p v-else class="mt-2 text-xs text-muted-foreground">Exemption reason: {{ exemptForm.reason || '—' }}</p>
+                        </div>
+
+                        <div v-if="cashForm.notes || exemptForm.reason" class="rounded-md bg-muted p-3 text-sm">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</p>
+                            <p class="mt-1 whitespace-pre-wrap text-muted-foreground">{{ previewType === 'exempt' ? exemptForm.reason : cashForm.notes || '—' }}</p>
+                        </div>
+                    </div>
+
+                    <DialogFooter class="mt-4">
+                        <Button variant="outline" @click="showPreview = false">Cancel</Button>
+                        <Button :disabled="previewItems.length === 0" @click="confirmPreview">
+                            {{ previewType === 'exempt' ? 'Confirm Exemption' : 'Confirm Payment' }}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     </AppLayout>
 </template>

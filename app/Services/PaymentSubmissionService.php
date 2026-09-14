@@ -165,11 +165,10 @@ $pendingKeys[] = $key;
                 }
             }
 
-            $payments = new Collection();
+            // One batch + one receipt for the whole submission group (requirement: one transaction → one receipt)
+            $payments = $this->payments->settleBatchFromSubmissions($officer, $student, $rows);
 
             foreach ($rows as $row) {
-                $payments->push($this->payments->settleFromSubmission($officer, $student, $row));
-
                 $row->fill([
                     'status' => PaymentSubmission::STATUS_APPROVED,
                     'verified_by' => $officer->id,

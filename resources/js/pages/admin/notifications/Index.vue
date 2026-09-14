@@ -14,6 +14,8 @@ interface Notification {
     read_at: string | null
     created_at: string
     is_read: boolean
+    url?: string | null
+    data?: Record<string, unknown> | null
 }
 
 defineProps<{
@@ -32,6 +34,16 @@ function markRead(id: string) {
 
 function markAllRead() {
     router.post('/admin/notifications/read-all')
+}
+
+function openNotification(n: Notification) {
+    if (!n.is_read) {
+        router.post(`/admin/notifications/${n.id}/read`, {}, { preserveScroll: true })
+    }
+    const target = n.url || (n.data as Record<string, unknown> | null)?.url as string | undefined
+    if (target) {
+        router.visit(target)
+    }
 }
 
 function deleteNotification(id: string) {
@@ -80,17 +92,20 @@ function deleteAll() {
                         <li
                             v-for="n in notifications"
                             :key="n.id"
-                            :class="['flex items-start gap-3 px-5 py-4 transition-colors hover:bg-muted/40', !n.is_read ? 'bg-primary/5' : '']"
+                            :class="['flex items-start gap-3 px-5 py-4 transition-colors hover:bg-muted/40', !n.is_read ? 'bg-primary/5' : '', n.url || (n.data as Record<string, unknown> | null)?.url ? 'cursor-pointer' : '']"
+                            @click="openNotification(n)"
                         >
                             <span class="mt-1.5 size-2 shrink-0 rounded-full" :class="n.is_read ? 'bg-transparent' : 'bg-primary'" />
                             <div class="min-w-0 flex-1">
                                 <div class="flex items-center gap-2">
                                     <span class="font-medium text-sm">{{ n.title }}</span>
+                                    <span v-if="n.url || (n.data as Record<string, unknown> | null)?.url" class="text-xs text-primary">↗</span>
                                 </div>
                                 <p class="mt-1 text-sm text-muted-foreground">{{ n.body }}</p>
                                 <p class="mt-1 text-xs text-muted-foreground">{{ new Date(n.created_at).toLocaleString() }}</p>
+                                <p v-if="n.url" class="mt-1 text-xs text-primary/70">Go to {{ n.url }}</p>
                             </div>
-                            <div class="flex shrink-0 items-center gap-2">
+                            <div class="flex shrink-0 items-center gap-2" @click.stop>
                                 <button v-if="!n.is_read" @click="markRead(n.id)" class="text-xs font-medium text-primary hover:underline">Mark read</button>
                                 <button @click="deleteNotification(n.id)" class="inline-flex items-center gap-1 text-xs font-medium text-destructive hover:underline">
                                     <Trash2 class="size-3" /> Delete

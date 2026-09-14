@@ -8,6 +8,7 @@ use App\Models\Institute;
 use App\Models\Program;
 use App\Models\ShiftRequest;
 use App\Services\AcademicTermService;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -15,7 +16,8 @@ use Illuminate\Validation\ValidationException;
 class ShiftRequestController extends Controller
 {
     public function __construct(
-        private AcademicTermService $termService
+        private AcademicTermService $termService,
+        private NotificationService $notifications
     ) {}
 
     /**
@@ -61,6 +63,12 @@ class ShiftRequestController extends Controller
             'reason' => $request->input('reason'),
             'status' => ShiftRequest::STATUS_PENDING,
         ]);
+
+        try {
+            $this->notifications->notifyShiftRequestSubmitted($shift);
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return response()->json([
             'data' => $this->payload($shift->load(['requestedInstitute', 'requestedProgram', 'currentInstitute', 'currentProgram'])),

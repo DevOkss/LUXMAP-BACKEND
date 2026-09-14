@@ -36,6 +36,16 @@ class ReceiptRepository
         return $this->model->where('payment_id', $paymentId)->first();
     }
 
+    public function findByBatchId(string $batchId): ?Receipt
+    {
+        return $this->model->where('batch_id', $batchId)->first();
+    }
+
+    public function findByBatch(string $batchId): ?Receipt
+    {
+        return $this->findByBatchId($batchId);
+    }
+
     public function create(array $data): Receipt
     {
         return $this->model->create($data);

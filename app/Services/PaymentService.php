@@ -10,7 +10,9 @@ use App\Models\User;
 use App\Repositories\PaymentRepository;
 use App\Repositories\ReceiptRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class PaymentService
@@ -18,10 +20,11 @@ class PaymentService
     public function __construct(
         private PaymentRepository $paymentRepository,
         private ReceiptRepository $receiptRepository,
-        private AcademicTermService $terms
+        private AcademicTermService $terms,
+        private NotificationService $notifications
     ) {}
 
-    public function list(array $filters = []): Collection
+    public function list(array $filters = []): EloquentCollection
     {
         return $this->paymentRepository->all($filters);
     }
@@ -56,7 +59,7 @@ class PaymentService
         return $this->paymentRepository->paginateBatches($filters, $perPage);
     }
 
-    public function forBatches(array $batchIds, array $filters = []): Collection
+    public function forBatches(array $batchIds, array $filters = []): EloquentCollection
     {
         return $this->paymentRepository->forBatches($batchIds, $filters);
     }
@@ -71,7 +74,7 @@ class PaymentService
         return $this->paymentRepository->delete($payment);
     }
 
-    public function userPayments(int $userId): Collection
+    public function userPayments(int $userId): EloquentCollection
     {
         return $this->paymentRepository->findByUser($userId);
     }
@@ -79,7 +82,9 @@ class PaymentService
     /**
      * Record an on-site cash payment for an already-verified selection of
      * outstanding obligations (see ObligationService::verifySelected).
-     * Creates one paid transaction per obligation and a receipt for each.
+     * Creates one paid transaction per obligation but exactly ONE receipt
+     * for the whole batch (transaction). The student receives a confirmation
+     * notification with total, selected fees and the receipt reference.
      *
      * @param  array{organization_id: int, items: array, total: float}  $selected
      * @return Collection<int, Payment>
@@ -94,32 +99,49 @@ class PaymentService
 
         $batchId = (string) Str::uuid();
 
-        $payments = new Collection;
+        return DB::transaction(function () use ($officer, $student, $selected, $notes, $term, $batchId) {
+            $payments = new Collection;
 
-        foreach ($selected['items'] as $item) {
-            $payments->push($this->createSettledTransaction(
-                student: $student,
-                organizationId: $selected['organization_id'],
-                term: $term,
-                feeType: $item['type'],
-                obligationId: $item['id'],
-                amount: $item['amount'],
-                method: Payment::METHOD_CASH,
-                status: Payment::STATUS_PAID,
-                paidAt: now(),
-                notes: $notes,
-                processedBy: $officer->id,
-                batchId: $batchId,
-            ));
-        }
+            foreach ($selected['items'] as $item) {
+                $payments->push($this->createPaymentRow(
+                    student: $student,
+                    organizationId: $selected['organization_id'],
+                    term: $term,
+                    feeType: $item['type'],
+                    obligationId: $item['id'],
+                    amount: $item['amount'],
+                    method: Payment::METHOD_CASH,
+                    status: Payment::STATUS_PAID,
+                    paidAt: now(),
+                    notes: $notes,
+                    processedBy: $officer->id,
+                    batchId: $batchId,
+                ));
+            }
 
-        return $payments;
+            $receipt = $this->generateReceiptForBatch($payments, $officer->id);
+
+            // Notify student — single notification per transaction, with breakdown.
+            $orgName = $payments->first()?->organization?->name;
+            if (! $orgName) {
+                $org = \App\Models\Organization::find($selected['organization_id']);
+                $orgName = $org?->name;
+            }
+            try {
+                $this->notifications->notifyPaymentRecorded($student, $payments, $receipt, $orgName);
+            } catch (\Throwable $e) {
+                // Never fail the transaction on push error (see WebPushService hardening).
+                report($e);
+            }
+
+            return $payments;
+        });
     }
 
     /**
      * Exempt/waive an already-verified set of outstanding obligations.
-     * Creates one transaction per item flagged as exempted plus a record for
-     * the student's transaction history.
+     * Creates one transaction per item flagged as exempted but exactly ONE
+     * receipt for the batch.
      */
     public function exemptObligations(
         User $officer,
@@ -135,40 +157,49 @@ class PaymentService
 
         $batchId = (string) Str::uuid();
 
-        $payments = new Collection;
+        return DB::transaction(function () use ($officer, $student, $selected, $reason, $term, $batchId) {
+            $payments = new Collection;
 
-        foreach ($selected['items'] as $item) {
-            $payments->push($this->createSettledTransaction(
-                student: $student,
-                organizationId: $selected['organization_id'],
-                term: $term,
-                feeType: $item['type'],
-                obligationId: $item['id'],
-                amount: $item['amount'],
-                method: Payment::METHOD_EXEMPTION,
-                status: Payment::STATUS_EXEMPTED,
-                paidAt: null,
-                notes: $reason,
-                exemptedBy: $officer->id,
-                batchId: $batchId,
-            ));
-        }
+            foreach ($selected['items'] as $item) {
+                $payments->push($this->createPaymentRow(
+                    student: $student,
+                    organizationId: $selected['organization_id'],
+                    term: $term,
+                    feeType: $item['type'],
+                    obligationId: $item['id'],
+                    amount: $item['amount'],
+                    method: Payment::METHOD_EXEMPTION,
+                    status: Payment::STATUS_EXEMPTED,
+                    paidAt: null,
+                    notes: $reason,
+                    exemptedBy: $officer->id,
+                    batchId: $batchId,
+                ));
+            }
 
-        return $payments;
+            $this->generateReceiptForBatch($payments, $officer->id);
+
+            return $payments;
+        });
     }
 
     /**
      * Create the confirmed ledger transaction once an officer approves a
-     * verified cashless submission. Generates the official SOMS receipt.
+     * verified cashless submission. For a single submission row (legacy).
+     * Generates one receipt for this single-row batch.
      */
     public function settleFromSubmission(
         User $officer,
         User $student,
-        PaymentSubmission $submission
+        PaymentSubmission $submission,
+        ?string $batchId = null,
+        bool $withReceipt = true
     ): Payment {
+        $batchId = $batchId ?: (string) Str::uuid();
+
         $payment = $this->paymentRepository->create([
             'uuid' => (string) Str::uuid(),
-            'batch_id' => (string) Str::uuid(),
+            'batch_id' => $batchId,
             'user_id' => $student->id,
             'organization_id' => $submission->organization_id,
             'academic_term_id' => $submission->academic_term_id,
@@ -185,22 +216,53 @@ class PaymentService
             'paid_at' => now(),
         ]);
 
-        $this->generateReceiptFor($payment, processedBy: $officer->id);
+        if ($withReceipt) {
+            $this->generateReceiptForBatch(new Collection([$payment]), $officer->id);
+        }
 
         return $payment;
+    }
+
+    /**
+     * Batch settlement for a whole submission group (multiple obligations
+     * submitted together). Creates N payments sharing one batch_id + ONE receipt.
+     *
+     * @param  Collection<int, PaymentSubmission>  $submissions
+     * @return Collection<int, Payment>
+     */
+    public function settleBatchFromSubmissions(User $officer, User $student, Collection $submissions): Collection
+    {
+        if ($submissions->isEmpty()) {
+            return new Collection;
+        }
+
+        $batchId = (string) Str::uuid();
+        $payments = new Collection;
+
+        foreach ($submissions as $submission) {
+            $payments->push($this->settleFromSubmission($officer, $student, $submission, $batchId, false));
+        }
+
+        $this->generateReceiptForBatch($payments, $officer->id);
+
+        return $payments;
     }
 
     public function generateReceipt(Payment $payment, ?int $issuedBy = null): Receipt
     {
         return $this->receiptRepository->create([
             'payment_id' => $payment->id,
+            'batch_id' => $payment->batch_id,
             'receipt_number' => $this->receiptRepository->generateReceiptNumber(),
             'issued_at' => $payment->paid_at ?? now(),
             'issued_by' => $issuedBy,
         ]);
     }
 
-    private function createSettledTransaction(
+    /**
+     * Create a single settled payment row without generating a receipt.
+     */
+    private function createPaymentRow(
         User $student,
         int $organizationId,
         AcademicTerm $term,
@@ -213,10 +275,9 @@ class PaymentService
         ?string $notes = null,
         ?int $processedBy = null,
         ?int $exemptedBy = null,
-        ?string $reason = null,
         ?string $batchId = null,
     ): Payment {
-        $payment = $this->paymentRepository->create([
+        return $this->paymentRepository->create([
             'uuid' => (string) Str::uuid(),
             'batch_id' => $batchId,
             'user_id' => $student->id,
@@ -235,8 +296,33 @@ class PaymentService
             'paid_at' => $paidAt,
             'notes' => $notes,
         ]);
+    }
 
-        $this->generateReceiptFor($payment, processedBy: $processedBy, exemptedBy: $exemptedBy);
+    /**
+     * Legacy helper kept for single-payment receipt creation (not used by
+     * batch flows any more). Retained for backwards compatibility.
+     */
+    private function createSettledTransaction(
+        User $student,
+        int $organizationId,
+        AcademicTerm $term,
+        string $feeType,
+        int $obligationId,
+        float $amount,
+        string $method,
+        string $status,
+        ?\DateTimeInterface $paidAt,
+        ?string $notes = null,
+        ?int $processedBy = null,
+        ?int $exemptedBy = null,
+        ?string $reason = null,
+        ?string $batchId = null,
+    ): Payment {
+        $payment = $this->createPaymentRow(
+            $student, $organizationId, $term, $feeType, $obligationId, $amount, $method, $status, $paidAt, $notes, $processedBy, $exemptedBy, $batchId
+        );
+
+        $this->generateReceiptForBatch(new Collection([$payment]), $processedBy ?? $exemptedBy);
 
         return $payment;
     }
@@ -249,9 +335,39 @@ class PaymentService
 
         $this->receiptRepository->create([
             'payment_id' => $payment->id,
+            'batch_id' => $payment->batch_id,
             'receipt_number' => $this->receiptRepository->generateReceiptNumber(),
             'issued_at' => now(),
             'issued_by' => $processedBy ?? $exemptedBy,
+        ]);
+    }
+
+    /**
+     * Generate exactly ONE receipt for the whole batch. The receipt is linked
+     * to the first payment in the batch but carries the batch_id so the full
+     * breakdown can be reconstructed.
+     */
+    public function generateReceiptForBatch(Collection $payments, ?int $issuedBy = null): Receipt
+    {
+        if ($payments->isEmpty()) {
+            throw new \InvalidArgumentException('Cannot generate receipt for empty batch.');
+        }
+
+        $first = $payments->first();
+        $batchId = $first->batch_id;
+
+        // Guard: if a receipt already exists for this batch, reuse it.
+        $existing = $this->receiptRepository->findByBatchId($batchId);
+        if ($existing) {
+            return $existing;
+        }
+
+        return $this->receiptRepository->create([
+            'payment_id' => $first->id,
+            'batch_id' => $batchId,
+            'receipt_number' => $this->receiptRepository->generateReceiptNumber(),
+            'issued_at' => $first->paid_at ?? now(),
+            'issued_by' => $issuedBy,
         ]);
     }
 }

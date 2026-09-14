@@ -52,6 +52,8 @@ class PaymentResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'uuid' => $this->uuid,
+            'batch_id' => $this->batch_id,
             'user_id' => $this->user_id,
             'organization_id' => $this->organization_id,
             'academic_term_id' => $this->academic_term_id,
@@ -112,11 +114,13 @@ class PaymentResource extends JsonResource
             'receipt' => $this->when($this->relationLoaded('receipt') && $this->receipt, fn() => [
                 'id' => $this->receipt->id,
                 'receipt_number' => $this->receipt->receipt_number,
+                'batch_id' => $this->receipt->batch_id ?? $this->batch_id,
                 'issued_at' => $this->receipt->issued_at,
                 'issued_by' => $this->receipt->relationLoaded('issuedBy') && $this->receipt->issuedBy
                     ? ['id' => $this->receipt->issuedBy->id, 'name' => $this->receipt->issuedBy->name]
                     : null,
             ]),
+            'created_at' => $this->created_at,
             'processedBy' => $this->when($this->relationLoaded('processedBy') && $this->processedBy, fn() => [
                 'id' => $this->processedBy->id,
                 'name' => $this->processedBy->name,

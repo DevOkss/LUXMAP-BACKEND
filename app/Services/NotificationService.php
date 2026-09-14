@@ -169,6 +169,138 @@ class NotificationService
         }
     }
 
+    /**
+     * Notify a student that a walk-in payment has been recorded by an officer.
+     * One notification per batch (transaction), with total, fees breakdown,
+     * payment date and the single receipt reference number.
+     */
+    public function notifyPaymentRecorded(User $student, \Illuminate\Support\Collection $payments, \App\Models\Receipt $receipt, ?string $organizationName = null): void
+    {
+        $total = number_format((float) $payments->sum('amount'), 2);
+        $feeNames = $payments->map(function ($p) {
+            if ($p->relationLoaded('fee') && $p->fee) return $p->fee->name;
+            if ($p->relationLoaded('event') && $p->event) return $p->event->title;
+            // Fallback when not eager loaded
+            if ($p->fee_type === 'penalty' && $p->event) return $p->event->title;
+            if ($p->fee) return $p->fee->name;
+            return $p->fee_type === 'penalty' ? 'Penalty' : 'Fee';
+        })->filter()->implode(', ');
+
+        $date = $receipt->issued_at ? $receipt->issued_at->format('M j, Y') : now()->format('M j, Y');
+        $orgLabel = $organizationName ? " for {$organizationName}" : '';
+        $body = "Your payment of ₱{$total}{$orgLabel} has been recorded on {$date}. Receipt: {$receipt->receipt_number}.";
+        if ($feeNames !== '') {
+            $body .= " Fees: {$feeNames}.";
+        }
+
+        $this->notifyUser(
+            $student,
+            'Payment recorded — ₱'.$total,
+            $body,
+            [
+                'type' => 'payment_recorded',
+                'receipt_number' => $receipt->receipt_number,
+                'receipt_id' => $receipt->id,
+                'batch_id' => $receipt->batch_id ?? $payments->first()?->batch_id,
+                'total' => (float) $payments->sum('amount'),
+                'fees' => $feeNames,
+                'paid_at' => $receipt->issued_at?->toIsoString() ?? now()->toIsoString(),
+                'url' => '/receipts/'.$receipt->id,
+            ],
+        );
+    }
+
+    /**
+     * Notify all super_admins that a student has submitted a program shift request.
+     * The notification links to the admin shift-requests index.
+     */
+    public function notifyShiftRequestSubmitted(\App\Models\ShiftRequest $shift): void
+    {
+        $shift->loadMissing(['user', 'currentInstitute', 'currentProgram', 'requestedInstitute', 'requestedProgram']);
+        $student = $shift->user;
+        if (! $student) {
+            return;
+        }
+
+        $current = trim(($shift->currentInstitute?->name ?? '—').' / '.($shift->currentProgram?->name ?? '—'), ' /');
+        $requested = trim(($shift->requestedInstitute?->name ?? '—').' / '.($shift->requestedProgram?->name ?? '—'), ' /');
+        $reason = $shift->reason ? ' Reason: '.$shift->reason : '';
+
+        $title = 'New shift request — '.($student->name ?? 'Student');
+        $body = ($student->name ?? 'A student').' ('.($student->student_number ?? '—').") requested to shift from {$current} to {$requested}.{$reason}";
+
+        foreach ($this->superAdmins() as $admin) {
+            $this->notifyUser(
+                $admin,
+                $title,
+                $body,
+                [
+                    'type' => 'shift_request',
+                    'shift_request_id' => $shift->id,
+                    'student_id' => $student->id,
+                    'student_name' => $student->name,
+                    'status' => $shift->status,
+                    'url' => '/admin/shift-requests',
+                ],
+            );
+        }
+    }
+
+    /**
+     * Notify the student that their shift request has been reviewed (approved/rejected).
+     * Links to the PWA shift page (/shift).
+     */
+    public function notifyShiftRequestReviewed(\App\Models\ShiftRequest $shift): void
+    {
+        $shift->loadMissing(['user', 'requestedInstitute', 'requestedProgram', 'currentInstitute', 'currentProgram', 'reviewedBy']);
+        $student = $shift->user;
+        if (! $student) {
+            return;
+        }
+
+        $requested = trim(($shift->requestedInstitute?->name ?? '—').' / '.($shift->requestedProgram?->name ?? '—'), ' /');
+        $isApproved = $shift->status === \App\Models\ShiftRequest::STATUS_APPROVED;
+        $title = $isApproved ? 'Shift request approved' : 'Shift request rejected';
+        $statusVerb = $isApproved ? 'approved' : 'rejected';
+        $body = "Your request to shift to {$requested} has been {$statusVerb}.";
+        if ($shift->remarks) {
+            $body .= ' Remarks: '.$shift->remarks;
+        }
+        if ($isApproved) {
+            $body .= ' Your institute/program has been updated.';
+        }
+
+        $this->notifyUser(
+            $student,
+            $title,
+            $body,
+            [
+                'type' => $isApproved ? 'shift_request_approved' : 'shift_request_rejected',
+                'shift_request_id' => $shift->id,
+                'status' => $shift->status,
+                'requested_institute' => $shift->requestedInstitute?->name,
+                'requested_program' => $shift->requestedProgram?->name,
+                'remarks' => $shift->remarks,
+                'url' => '/shift',
+            ],
+        );
+    }
+
+    private function superAdmins(): Collection
+    {
+        $ids = \Illuminate\Support\Facades\DB::table('organization_user')
+            ->where('role', UserRole::SUPER_ADMIN->value)
+            ->pluck('user_id')
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return new Collection;
+        }
+
+        return User::whereIn('id', $ids)->get();
+    }
+
     private function formatDate($date): string
     {
         return $date ? $date->format('M j, Y') : 'TBA';

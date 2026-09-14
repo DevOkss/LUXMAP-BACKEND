@@ -9,14 +9,47 @@ class ReceiptResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        // Resolve batch payments for the receipt (one receipt per batch -> many payments)
+        $batchId = $this->batch_id ?? $this->payment?->batch_id;
+        $batchPayments = null;
+        $total = null;
+        $items = null;
+        if ($batchId) {
+            $batchPayments = \App\Models\Payment::with(['fee', 'event', 'event.organization'])
+                ->where('batch_id', $batchId)
+                ->get();
+            $total = (float) $batchPayments->sum('amount');
+            $items = $batchPayments->map(fn (\App\Models\Payment $p) => [
+                'id' => $p->id,
+                'fee_type' => $p->fee_type,
+                'amount' => (float) $p->amount,
+                'status' => $p->status,
+                'isExempted' => (bool) $p->isExempted,
+                'fee' => $p->fee ? ['id' => $p->fee->id, 'name' => $p->fee->name] : null,
+                'event' => $p->event ? ['id' => $p->event->id, 'title' => $p->event->title, 'event_date' => $p->event->event_date] : null,
+            ])->values();
+        }
+
         return [
             'id' => $this->id,
             'payment_id' => $this->payment_id,
+            'batch_id' => $batchId,
             'receipt_number' => $this->receipt_number,
             'issued_at' => $this->issued_at,
             'notes' => $this->notes,
+            'total' => $total ?? ($this->payment ? (float) $this->payment->amount : null),
+            'items' => $items,
+            'payments' => $batchPayments ? $batchPayments->map(fn (\App\Models\Payment $p) => [
+                'id' => $p->id,
+                'uuid' => $p->uuid,
+                'fee_type' => $p->fee_type,
+                'amount' => (float) $p->amount,
+                'fee' => $p->fee ? ['id' => $p->fee->id, 'name' => $p->fee->name] : null,
+                'event' => $p->event ? ['id' => $p->event->id, 'title' => $p->event->title] : null,
+            ])->values() : null,
             'payment' => $this->when($this->relationLoaded('payment') && $this->payment, fn() => [
                 'id' => $this->payment->id,
+                'batch_id' => $this->payment->batch_id,
                 'amount' => (float) $this->payment->amount,
                 'payment_method' => $this->payment->payment_method,
                 'status' => $this->payment->status,

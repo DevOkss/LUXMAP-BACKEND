@@ -25,6 +25,8 @@ class NotificationController extends Controller
                 'read_at' => $n->read_at,
                 'created_at' => $n->created_at,
                 'is_read' => !is_null($n->read_at),
+                'data' => $n->data['data'] ?? [],
+                'url' => $n->data['data']['url'] ?? $n->data['url'] ?? null,
             ]),
             'unread_count' => $this->notificationService->unreadCount($request->user()),
         ]);

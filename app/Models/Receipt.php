@@ -11,6 +11,7 @@ class Receipt extends Model
     use HasFactory;
     protected $fillable = [
         'payment_id',
+        'batch_id',
         'receipt_number',
         'issued_by',
         'issued_at',
@@ -32,5 +33,10 @@ class Receipt extends Model
     public function issuedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'issued_by');
+    }
+
+    public function batchPayments()
+    {
+        return $this->hasMany(Payment::class, 'batch_id', 'batch_id');
     }
 }

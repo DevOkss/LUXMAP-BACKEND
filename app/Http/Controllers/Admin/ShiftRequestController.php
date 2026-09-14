@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ShiftRequest;
 use App\Services\AcademicTermService;
+use App\Services\NotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,7 +14,8 @@ use Inertia\Response;
 class ShiftRequestController extends Controller
 {
     public function __construct(
-        private AcademicTermService $termService
+        private AcademicTermService $termService,
+        private NotificationService $notifications
     ) {}
 
     public function index(Request $request): Response
@@ -106,6 +108,12 @@ class ShiftRequestController extends Controller
             'remarks' => $request->input('remarks'),
         ]);
 
+        try {
+            $this->notifications->notifyShiftRequestReviewed($shiftRequest->fresh(['user', 'requestedInstitute', 'requestedProgram']));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
         return redirect()->route('admin.shift-requests.index')
             ->with('success', 'Shift request approved — the student now belongs to the requested institute/program.');
     }
@@ -126,6 +134,12 @@ class ShiftRequestController extends Controller
             'reviewed_at' => now(),
             'remarks' => $request->input('remarks'),
         ]);
+
+        try {
+            $this->notifications->notifyShiftRequestReviewed($shiftRequest->fresh(['user', 'requestedInstitute', 'requestedProgram']));
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return redirect()->route('admin.shift-requests.index')
             ->with('success', 'Shift request rejected.');
