@@ -29,8 +29,10 @@
 ### Tests / build
 - Suite **325 passed (1524 assertions)**; SOMS `npm run build` clean; PWA `npm run build` (vue-tsc + Vite) clean.
 
-### Deploy (Nov 13)
-- PWA `e0bcba8` + SOMS `c10f8bb` are the last live commits before this session; this session ships the import/password/auth refactor. **PWA first, then SOMS.** SOMS deploy uses the normal CI/`deploy/deploy.sh` path (pull → composer → `npm ci && vite build` → `migrate --force` → caches → `php8.3-fpm reload`); migrations **drop `institution_accounts` and `shift_requests`** — irreversible on rollback beyond `migrate:rollback`.
+### Deploy (Nov 13) — SHIPPED
+- PWA `40e543a` deployed first (Vercel), then SOMS `b30e9e4` (CI `tests` + `linter` success → `deploy-production` success in 55s). Deploy path: pull → composer → `npm ci && vite build` → `migrate --force` → caches → `php8.3-fpm reload`; no proxy/nginx changes.
+- All four `2026_11_13_*` migrations ran on production; `php artisan about` confirms PHP 8.3.6, `production`, debug OFF, `APP_URL=https://luxmap.devokss.online`, `PWA_URL=https://luxmap-topaz.vercel.app`.
+- Verified: `luxmap`/`labsync`/`hulagway` + PWA all 200; `POST /api/change-password` → 401 unauthenticated; `/api/register`, `/api/me/refresh`, `/api/onboarding` → 404. **Destructive drops** (`institution_accounts`, `shift_requests`) are irreversible on rollback beyond `migrate:rollback`; students only in `institution_accounts` can't log in until imported (temp password `student`).
 
 ## Previous Session (September 14, 2026) — one receipt per batch + preview, payment/shift notifications, term-based scoping, fee edit fix
 
