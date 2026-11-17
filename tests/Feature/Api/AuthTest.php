@@ -3,29 +3,12 @@
 use App\Enums\UserRole;
 use App\Models\Organization;
 use App\Models\User;
+use Database\Seeders\OrganizationSeeder;
 
 beforeEach(function () {
     $this->seed([
-        \Database\Seeders\OrganizationSeeder::class,
+        OrganizationSeeder::class,
     ]);
-});
-
-test('student can register', function () {
-    $sro = Organization::where('code', 'BSCS-SRO')->first();
-
-    $response = $this->postJson('/api/register', [
-        'name' => 'Test Student',
-        'email' => 'student@test.com',
-        'password' => 'password123',
-        'password_confirmation' => 'password123',
-        'student_number' => '2026-00001',
-        'institute' => 'ICS',
-        'program' => 'BSCS',
-        'year_level' => 1,
-    ]);
-
-    $response->assertStatus(201);
-    expect(User::where('email', 'student@test.com')->exists())->toBeTrue();
 });
 
 test('user can login', function () {

@@ -18,7 +18,7 @@ class PermissionRegistry
         'dashboard', 'heads', 'users', 'officers', 'institutes',
         'events', 'calendar', 'fees', 'payments', 'penalties',
         'payment_submissions', 'payment_accounts',
-        'notifications', 'activity_logs', 'shift_requests',
+        'notifications', 'activity_logs', 'student_import',
         'academic_terms',
     ];
 
@@ -88,7 +88,7 @@ class PermissionRegistry
     public function modulesFor(UserRole $role): array
     {
         return match ($role) {
-            UserRole::SUPER_ADMIN => ['dashboard', 'heads', 'users', 'institutes', 'notifications', 'activity_logs', 'shift_requests', 'academic_terms', 'device_bindings'],
+            UserRole::SUPER_ADMIN => ['dashboard', 'heads', 'users', 'institutes', 'notifications', 'activity_logs', 'student_import', 'academic_terms', 'device_bindings'],
             UserRole::SSC_HEAD => [...self::HEAD_MODULES, 'advisers'],
             UserRole::INSTITUTE_HEAD, UserRole::SRO_HEAD => [
                 ...array_slice(self::HEAD_MODULES, 0, 2), 'students', ...array_slice(self::HEAD_MODULES, 2),

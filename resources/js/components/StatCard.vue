@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { Link } from '@inertiajs/vue3';
+import { ArrowUpRight } from 'lucide-vue-next';
+import { computed } from 'vue';
 
 interface Props {
-    label: string
-    value: string | number
-    icon: object
-    tone?: 'primary' | 'success' | 'info' | 'warning' | 'danger'
-    trend?: string | null
+    label: string;
+    value: string | number;
+    icon: object;
+    tone?: 'primary' | 'success' | 'info' | 'warning' | 'danger';
+    trend?: string | null;
+    href?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     tone: 'primary',
     trend: null,
-})
+    href: undefined,
+});
 
 const tones = {
     primary: {
@@ -40,22 +44,35 @@ const tones = {
         icon: 'bg-destructive text-destructive-foreground',
         trend: 'text-destructive',
     },
-}
+};
 
-const toneClasses = computed(() => tones[props.tone])
+const toneClasses = computed(() => tones[props.tone]);
 </script>
 
 <template>
-    <div class="rounded-xl border p-5 transition-shadow hover:shadow-sm" :class="toneClasses.card">
-        <div class="flex items-start gap-3">
-            <div class="flex size-11 shrink-0 items-center justify-center rounded-lg" :class="toneClasses.icon">
-                <component :is="icon" class="size-5" />
+    <component
+        :is="href ? Link : 'div'"
+        :href="href"
+        class="block rounded-xl border p-5 transition-shadow"
+        :class="[
+            toneClasses.card,
+            href
+                ? 'cursor-pointer hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+                : 'hover:shadow-sm',
+        ]"
+    >
+        <div class="flex items-start justify-between gap-3">
+            <div class="flex min-w-0 items-start gap-3">
+                <div class="flex size-11 shrink-0 items-center justify-center rounded-lg" :class="toneClasses.icon">
+                    <component :is="icon" class="size-5" />
+                </div>
+                <div class="min-w-0">
+                    <p class="text-sm font-medium text-muted-foreground">{{ label }}</p>
+                    <p class="mt-1 text-2xl font-bold">{{ value }}</p>
+                    <p v-if="trend" class="mt-1 text-xs font-medium" :class="toneClasses.trend">{{ trend }}</p>
+                </div>
             </div>
-            <div class="min-w-0">
-                <p class="text-sm font-medium text-muted-foreground">{{ label }}</p>
-                <p class="mt-1 text-2xl font-bold">{{ value }}</p>
-                <p v-if="trend" class="mt-1 text-xs font-medium" :class="toneClasses.trend">{{ trend }}</p>
-            </div>
+            <ArrowUpRight v-if="href" class="size-4 shrink-0 text-muted-foreground" />
         </div>
-    </div>
+    </component>
 </template>

@@ -17,8 +17,8 @@ use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\PaymentSubmissionController;
 use App\Http\Controllers\Admin\ProgramController;
 use App\Http\Controllers\Admin\QrConfigurationController;
-use App\Http\Controllers\Admin\ShiftRequestController;
 use App\Http\Controllers\Admin\StudentController;
+use App\Http\Controllers\Admin\StudentImportController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\LandingController;
 use Illuminate\Support\Facades\Route;
@@ -56,6 +56,13 @@ Route::middleware(['auth', 'verified', "role:{$adminRoles}"])->name('admin.')->p
             ->name('heads.update');
         Route::delete('/heads/{user}', [HeadController::class, 'destroy'])
             ->name('heads.destroy');
+
+        Route::get('/students/import', [StudentImportController::class, 'create'])
+            ->name('students.import.create');
+        Route::post('/students/import', [StudentImportController::class, 'store'])
+            ->name('students.import.store');
+        Route::get('/students/import/template', [StudentImportController::class, 'template'])
+            ->name('students.import.template');
     });
 
     Route::middleware('role:ssc_head,institute_head,sro_head')->group(function () {
@@ -173,18 +180,6 @@ Route::middleware(['auth', 'verified', "role:{$adminRoles}"])->name('admin.')->p
             ->name('fees.unpublish');
         Route::post('/fees/penalty', [FeeController::class, 'storePenalty'])
             ->name('fees.penalty.store');
-    });
-
-    // Shift requests — super admin reviews student shift applications.
-    Route::middleware('role:super_admin')->group(function () {
-        Route::get('/shift-requests', [ShiftRequestController::class, 'index'])
-            ->name('shift-requests.index');
-        Route::patch('/shift-requests/{shiftRequest}', [ShiftRequestController::class, 'update'])
-            ->name('shift-requests.update');
-        Route::patch('/shift-requests/{shiftRequest}/approve', [ShiftRequestController::class, 'approve'])
-            ->name('shift-requests.approve');
-        Route::patch('/shift-requests/{shiftRequest}/reject', [ShiftRequestController::class, 'reject'])
-            ->name('shift-requests.reject');
     });
 
     // Academic terms — super admin manages the current semester/school year.

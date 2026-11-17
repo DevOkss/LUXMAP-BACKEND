@@ -3,14 +3,15 @@
 use App\Enums\UserRole;
 use App\Models\AcademicTerm;
 use App\Models\Organization;
-use App\Models\ShiftRequest;
 use App\Models\User;
+use Database\Seeders\InstituteSeeder;
+use Database\Seeders\OrganizationSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     $this->seed([
-        \Database\Seeders\InstituteSeeder::class,
-        \Database\Seeders\OrganizationSeeder::class,
+        InstituteSeeder::class,
+        OrganizationSeeder::class,
     ]);
 });
 
@@ -86,32 +87,4 @@ test('heads cannot access academic terms', function () {
         'academic_year' => '2026-2027',
         'semester' => '1st',
     ])->assertForbidden();
-});
-
-test('heads cannot review shift requests', function () {
-    $head = academicTermAdminUser('SSC', UserRole::SSC_HEAD);
-    $student = User::factory()->create(['is_enrolled' => true]);
-    $shift = ShiftRequest::factory()->create(['user_id' => $student->id, 'status' => ShiftRequest::STATUS_PENDING]);
-
-    $this->actingAs($head)->get('/admin/shift-requests')->assertForbidden();
-    $this->actingAs($head)->patch("/admin/shift-requests/{$shift->id}/approve")->assertForbidden();
-    expect($shift->fresh()->status)->toBe(ShiftRequest::STATUS_PENDING);
-});
-
-test('super admin can review and approve a shift request', function () {
-    $student = User::factory()->create(['is_enrolled' => true]);
-    $shift = ShiftRequest::factory()->create(['user_id' => $student->id, 'status' => ShiftRequest::STATUS_PENDING]);
-    $superAdmin = academicTermAdminUser('SSC', UserRole::SUPER_ADMIN);
-
-    $this->actingAs($superAdmin)->get('/admin/shift-requests')->assertOk();
-    $this->actingAs($superAdmin)->patch("/admin/shift-requests/{$shift->id}/approve", ['remarks' => 'ok'])
-        ->assertRedirect();
-
-    expect($shift->fresh()->status)->toBe(ShiftRequest::STATUS_APPROVED);
-});
-
-test('students cannot access the admin shift review', function () {
-    $student = User::factory()->create(['is_enrolled' => true]);
-
-    $this->actingAs($student)->get('/admin/shift-requests')->assertForbidden();
 });

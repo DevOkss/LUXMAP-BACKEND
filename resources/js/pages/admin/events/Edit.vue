@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import AppLayout from '@/layouts/AppLayout.vue';
-import PageHeader from '@/components/PageHeader.vue';
 import InputError from '@/components/InputError.vue';
-import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/vue3';
+import PageHeader from '@/components/PageHeader.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import AppLayout from '@/layouts/AppLayout.vue';
+import { type BreadcrumbItem } from '@/types';
+import { Head, useForm } from '@inertiajs/vue3';
 import { LoaderCircle } from 'lucide-vue-next';
 
 interface OrgOption {
@@ -46,6 +46,9 @@ const form = useForm({
     time_from: props.event.time_from?.slice(0, 5) || '',
     time_to: props.event.time_to?.slice(0, 5) || '',
 });
+
+const now = new Date();
+const minDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
 const submit = () => {
     form.put(route('admin.events.update', { event: props.event.uuid }));
@@ -88,7 +91,8 @@ const submit = () => {
 
                         <div class="grid gap-2">
                             <Label for="event_date">Date</Label>
-                            <Input id="event_date" v-model="form.event_date" type="date" />
+                            <Input id="event_date" v-model="form.event_date" type="date" :min="minDate" />
+                            <p class="text-xs text-muted-foreground">Only today or future dates can be selected.</p>
                             <InputError :message="form.errors.event_date" />
                         </div>
 
@@ -106,10 +110,17 @@ const submit = () => {
                         </div>
 
                         <div class="flex items-center justify-end gap-3 pt-2">
-                            <a :href="`/admin/events/${event.uuid}`" class="rounded-xl px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-100">
+                            <a
+                                :href="`/admin/events/${event.uuid}`"
+                                class="rounded-xl px-4 py-2.5 text-sm font-medium text-gray-500 hover:bg-gray-100"
+                            >
                                 Cancel
                             </a>
-                            <Button type="submit" :disabled="form.processing" class="rounded-xl bg-[#20673A] px-6 py-2.5 font-semibold text-white hover:bg-[#027F3B]">
+                            <Button
+                                type="submit"
+                                :disabled="form.processing"
+                                class="rounded-xl bg-[#20673A] px-6 py-2.5 font-semibold text-white hover:bg-[#027F3B]"
+                            >
                                 <LoaderCircle v-if="form.processing" class="h-4 w-4 animate-spin" />
                                 {{ form.processing ? 'Saving...' : 'Save Changes' }}
                             </Button>

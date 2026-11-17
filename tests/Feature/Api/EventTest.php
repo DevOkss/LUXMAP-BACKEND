@@ -6,11 +6,14 @@ use App\Models\Organization;
 use App\Models\Program;
 use App\Models\QrConfiguration;
 use App\Models\User;
+use App\Repositories\EventRepository;
+use Database\Seeders\InstituteSeeder;
+use Database\Seeders\OrganizationSeeder;
 
 beforeEach(function () {
     $this->seed([
-        \Database\Seeders\InstituteSeeder::class,
-        \Database\Seeders\OrganizationSeeder::class,
+        InstituteSeeder::class,
+        OrganizationSeeder::class,
     ]);
 });
 
@@ -19,6 +22,7 @@ function createUser(?Organization $org = null): User
     $user = User::factory()->create();
     $org ??= Organization::where('code', 'SSC')->first();
     $user->organizations()->attach($org->id, ['role' => 'super_admin', 'assigned_at' => now()]);
+
     return $user;
 }
 
@@ -30,6 +34,7 @@ function createOfficer(string $orgCode, string $role): User
         'position' => $role,
         'assigned_at' => now(),
     ]);
+
     return $user;
 }
 
@@ -178,6 +183,20 @@ test('validates required fields on create', function () {
     $response->assertStatus(422);
 });
 
+test('event date cannot be in the past', function () {
+    $user = createUser();
+    $org = Organization::where('code', 'SSC')->first();
+
+    $response = $this->actingAs($user)->postJson('/api/events', [
+        'organization_id' => $org->id,
+        'title' => 'Past Event',
+        'event_date' => now()->subDay()->toDateString(),
+    ]);
+
+    $response->assertStatus(422)->assertJsonValidationErrors('event_date');
+    expect(Event::where('title', 'Past Event')->doesntExist())->toBeTrue();
+});
+
 test('student cannot create an event in their organization', function () {
     $isc = Organization::where('code', 'ICS-ISC')->firstOrFail();
     $student = createStudent();
@@ -255,7 +274,7 @@ test('officer cannot list events of another organization', function () {
     Event::factory()->create(['organization_id' => $isc->id]);
     $sscOfficer = createOfficer('SSC', 'ssc_officer');
 
-    $this->actingAs($sscOfficer)->getJson('/api/events?organization_id=' . $isc->id)->assertStatus(403);
+    $this->actingAs($sscOfficer)->getJson('/api/events?organization_id='.$isc->id)->assertStatus(403);
 });
 
 test('officer cannot view an event of another organization', function () {
@@ -272,7 +291,7 @@ test('officer can view and list their own organization events', function () {
     $sscOfficer = createOfficer('SSC', 'ssc_officer');
 
     $this->actingAs($sscOfficer)->getJson("/api/events/{$event->uuid}")->assertStatus(200);
-    $this->actingAs($sscOfficer)->getJson('/api/events?organization_id=' . $ssc->id)->assertStatus(200);
+    $this->actingAs($sscOfficer)->getJson('/api/events?organization_id='.$ssc->id)->assertStatus(200);
 });
 
 test('pure student can list and view events of their own organization', function () {
@@ -280,7 +299,7 @@ test('pure student can list and view events of their own organization', function
     $event = Event::factory()->create(['organization_id' => $isc->id]);
     $student = createStudent();
 
-    $this->actingAs($student)->getJson('/api/events?organization_id=' . $isc->id)->assertStatus(200);
+    $this->actingAs($student)->getJson('/api/events?organization_id='.$isc->id)->assertStatus(200);
 
     $this->actingAs($student)->getJson("/api/events/{$event->uuid}")->assertStatus(200);
 });
@@ -311,7 +330,7 @@ test('upcoming scope excludes events whose date and time_to have passed', functi
         'time_to' => '10:00',
     ]);
 
-    $events = app(\App\Repositories\EventRepository::class)->getUpcoming($ssc->id);
+    $events = app(EventRepository::class)->getUpcoming($ssc->id);
 
     expect($events->count())->toBe(2);
     expect($events->pluck('status')->all())->toBe(['published', 'published']);
@@ -327,7 +346,7 @@ test('upcoming scope returns no results when the only event has ended', function
         'time_to' => now()->subHour()->format('H:i'),
     ]);
 
-    $events = app(\App\Repositories\EventRepository::class)->getUpcoming($ssc->id);
+    $events = app(EventRepository::class)->getUpcoming($ssc->id);
 
     expect($events->count())->toBe(0);
 });

@@ -7,42 +7,26 @@ use App\Http\Controllers\Api\DeviceController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\FaceController;
 use App\Http\Controllers\Api\FeeController;
-use App\Http\Controllers\Api\InstitutionAuthController;
 use App\Http\Controllers\Api\NotificationController;
-use App\Http\Controllers\Api\OnboardingController;
 use App\Http\Controllers\Api\OrganizationController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\QrConfigurationController;
 use App\Http\Controllers\Api\ReceiptController;
 use App\Http\Controllers\Api\ReportController;
-use App\Http\Controllers\Api\ShiftRequestController;
 use Illuminate\Support\Facades\Route;
 
 Route::name('api.')->group(function () {
 
     // Public routes
-    Route::post('/register', [AuthController::class, 'register'])->name('register');
     Route::post('/login', [AuthController::class, 'login'])->name('login');
-    Route::post('/institution/auth', [InstitutionAuthController::class, 'authenticate'])
-        ->middleware('throttle:10,1')
-        ->name('institution.auth');
 
     // Authenticated routes
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'password.changed'])->group(function () {
 
         // Auth
         Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
         Route::get('/user', [AuthController::class, 'user'])->name('user');
-        Route::post('/me/refresh', [AuthController::class, 'refresh'])->name('me.refresh');
-
-        // Onboarding
-        Route::get('/onboarding', [OnboardingController::class, 'index'])->name('onboarding.index');
-        Route::patch('/onboarding', [OnboardingController::class, 'update'])->name('onboarding.update');
-
-        // Shift Requests
-        Route::get('/shift-requests', [ShiftRequestController::class, 'index'])->name('shift-requests.index');
-        Route::get('/shift-requests/{shiftRequest}', [ShiftRequestController::class, 'show'])->name('shift-requests.show');
-        Route::post('/shift-requests', [ShiftRequestController::class, 'store'])->name('shift-requests.store');
+        Route::post('/change-password', [AuthController::class, 'changePassword'])->name('password.change');
 
         // Workspace
         Route::get('/workspaces', [AuthController::class, 'workspaces'])->name('workspaces');

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\UserRole;
+use App\Services\AcademicTermService;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -24,7 +25,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'institution_password_enc',
+        'must_change_password',
         'phone',
         'year_level',
         'sex',
@@ -44,6 +45,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'must_change_password' => 'boolean',
             'year_level' => 'integer',
             'is_enrolled' => 'boolean',
         ];
@@ -57,11 +59,6 @@ class User extends Authenticatable
     public function studentEnrollments(): HasMany
     {
         return $this->hasMany(StudentEnrollment::class);
-    }
-
-    public function shiftRequests(): HasMany
-    {
-        return $this->hasMany(ShiftRequest::class);
     }
 
     /**
@@ -143,24 +140,12 @@ class User extends Authenticatable
         return $this->hasRole(UserRole::adminPortalRoles());
     }
 
-    public function needsOnboarding(): bool
-    {
-        $enrollment = $this->currentEnrollment();
-
-        if (!$enrollment) {
-            // No active academic term: fall back to the legacy column check.
-            return is_null($this->institute_id) || is_null($this->program_id);
-        }
-
-        return is_null($enrollment->institute_id) || is_null($enrollment->program_id);
-    }
-
     /**
      * The enrollment snapshot for the currently-active academic term.
      */
     public function currentEnrollment(): ?StudentEnrollment
     {
-        $term = app(\App\Services\AcademicTermService::class)->current();
+        $term = app(AcademicTermService::class)->current();
 
         return $term ? $this->enrollmentForTerm($term) : null;
     }

@@ -14,7 +14,6 @@ class DatabaseSeeder extends Seeder
         $this->call([
             InstituteSeeder::class,
             OrganizationSeeder::class,
-            InstitutionAccountSeeder::class,
             HeadUserSeeder::class,
             AcademicTermSeeder::class,
         ]);
@@ -39,4 +38,3 @@ class DatabaseSeeder extends Seeder
         }
     }
 }
-

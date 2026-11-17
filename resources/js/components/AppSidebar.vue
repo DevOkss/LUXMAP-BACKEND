@@ -1,14 +1,37 @@
 <script setup lang="ts">
 import AppLogo from '@/components/AppLogo.vue';
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import {
+    Sidebar,
+    SidebarContent,
+    SidebarGroup,
+    SidebarGroupLabel,
+    SidebarHeader,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+} from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
 import {
-    LayoutGrid, Users, Calendar, CalendarRange, PhilippinePeso,
-    CreditCard, Bell, Building2, UserCog, ShieldCheck, GraduationCap, History, ArrowLeftRight, CalendarClock,
-    ClipboardList, Wallet, MonitorSmartphone
+    Bell,
+    Building2,
+    Calendar,
+    CalendarClock,
+    CalendarRange,
+    ClipboardList,
+    CreditCard,
+    GraduationCap,
+    History,
+    LayoutGrid,
+    MonitorSmartphone,
+    PhilippinePeso,
+    ShieldCheck,
+    Upload,
+    UserCog,
+    Users,
+    Wallet,
 } from 'lucide-vue-next';
+import { computed } from 'vue';
 const page = usePage();
 const permissions = (page.props as any).permissions as { modules?: string[]; role?: string } | undefined;
 const modules = permissions?.modules || [];
@@ -37,7 +60,7 @@ const moduleIcons: Record<string, object> = {
     institutes: Building2,
     students: GraduationCap,
     activity_logs: History,
-    shift_requests: ArrowLeftRight,
+    student_import: Upload,
     academic_terms: CalendarClock,
     device_bindings: MonitorSmartphone,
 };
@@ -58,7 +81,7 @@ const moduleNames: Record<string, string> = {
     institutes: 'Institute and Programs',
     students: 'Students',
     activity_logs: 'Activity Log',
-    shift_requests: 'Shift Requests',
+    student_import: 'Import Students',
     academic_terms: 'Academic Terms',
     device_bindings: 'Device Bindings',
 };
@@ -79,30 +102,61 @@ const moduleRoutes: Record<string, string> = {
     institutes: '/admin/institutes',
     students: '/admin/students',
     activity_logs: '/admin/activity-logs',
-    shift_requests: '/admin/shift-requests',
+    student_import: '/admin/students/import',
     academic_terms: '/admin/academic-terms',
     device_bindings: '/admin/device-bindings',
 };
 
-const officerModules = modules.filter(m =>
-    ['dashboard', 'heads', 'advisers', 'users', 'officers', 'events', 'calendar', 'fees', 'payments', 'payment_submissions', 'payment_accounts', 'notifications', 'institutes', 'students', 'activity_logs', 'shift_requests', 'academic_terms', 'device_bindings'].includes(m)
+const officerModules = modules.filter((m) =>
+    [
+        'dashboard',
+        'heads',
+        'advisers',
+        'users',
+        'officers',
+        'events',
+        'calendar',
+        'fees',
+        'payments',
+        'payment_submissions',
+        'payment_accounts',
+        'notifications',
+        'institutes',
+        'students',
+        'student_import',
+        'activity_logs',
+        'academic_terms',
+        'device_bindings',
+    ].includes(m),
 );
 
-const studentModules = modules.filter(m =>
-    ['dashboard', 'attendance_scanner', 'attendance_queue', 'attendance_history', 'fees', 'payments', 'receipts', 'notifications', 'profile', 'settings'].includes(m)
+const studentModules = modules.filter((m) =>
+    [
+        'dashboard',
+        'attendance_scanner',
+        'attendance_queue',
+        'attendance_history',
+        'fees',
+        'payments',
+        'receipts',
+        'notifications',
+        'profile',
+        'settings',
+    ].includes(m),
 );
 
-const mainNavItems: NavItem[] = role !== 'student'
-    ? officerModules.map(m => ({
-        title: moduleNames[m] || m,
-        href: moduleRoutes[m] || `/${m}`,
-        icon: moduleIcons[m] as object,
-    }))
-    : studentModules.map(m => ({
-        title: moduleNames[m] || m,
-        href: moduleRoutes[m] || `/${m}`,
-        icon: moduleIcons[m] as object,
-    }));
+const mainNavItems: NavItem[] =
+    role !== 'student'
+        ? officerModules.map((m) => ({
+              title: moduleNames[m] || m,
+              href: moduleRoutes[m] || `/${m}`,
+              icon: moduleIcons[m] as object,
+          }))
+        : studentModules.map((m) => ({
+              title: moduleNames[m] || m,
+              href: moduleRoutes[m] || `/${m}`,
+              icon: moduleIcons[m] as object,
+          }));
 
 const roleLabels: Record<string, string> = {
     super_admin: 'Super Admin',

@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\ChangePasswordRequest;
 use App\Http\Requests\Api\LoginRequest;
-use App\Http\Requests\Api\RegisterRequest;
 use App\Http\Resources\UserResource;
 use App\Models\Organization;
 use App\Services\AuthService;
@@ -33,20 +33,6 @@ class AuthController extends Controller
         ]);
     }
 
-    public function register(RegisterRequest $request): JsonResponse
-    {
-        $result = $this->authService->register(
-            $request->validated(),
-            $request->header('X-Device-Fingerprint')
-        );
-
-        return response()->json([
-            'token' => $result['token'],
-            'user' => UserResource::make($result['user']),
-            'workspaces' => $result['workspaces'],
-        ], 201);
-    }
-
     public function logout(Request $request): JsonResponse
     {
         $this->authService->logout($request->user());
@@ -54,13 +40,17 @@ class AuthController extends Controller
         return response()->json(['message' => 'Logged out successfully.']);
     }
 
-    public function refresh(Request $request): JsonResponse
+    public function changePassword(ChangePasswordRequest $request): JsonResponse
     {
-        $result = $this->authService->refreshUser($request->user());
+        $user = $this->authService->changePassword(
+            $request->user(),
+            $request->validated('current_password'),
+            $request->validated('password'),
+        );
 
         return response()->json([
-            'user' => UserResource::make($result['user']),
-            'synced' => $result['synced'],
+            'message' => 'Password changed successfully.',
+            'user' => UserResource::make($user),
         ]);
     }
 

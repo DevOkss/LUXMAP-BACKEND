@@ -62,7 +62,8 @@ class StudentController extends Controller
             })
             ->when($search, fn ($q) => $q->where(function ($q) use ($search) {
                 $q->where('users.name', 'like', "%{$search}%")
-                    ->orWhere('users.student_number', 'like', "%{$search}%");
+                    ->orWhere('users.student_number', 'like', "%{$search}%")
+                    ->orWhere('users.email', 'like', "%{$search}%");
             }))
             ->when($status === 'enrolled', fn ($q) => $q->where($term ? 'student_enrollments.is_enrolled' : 'users.is_enrolled', true))
             ->when($status === 'not_enrolled', fn ($q) => $q->where($term ? 'student_enrollments.is_enrolled' : 'users.is_enrolled', false))

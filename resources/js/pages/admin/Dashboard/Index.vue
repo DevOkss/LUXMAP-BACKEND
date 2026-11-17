@@ -6,7 +6,7 @@ import DashboardDonut from '@/components/charts/DashboardDonut.vue';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { AlertTriangle, ArrowUpRight, Banknote, Building2, CalendarDays, GraduationCap, ShieldCheck, Wallet } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
@@ -83,6 +83,20 @@ const props = defineProps<{
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Dashboard', href: '/dashboard' }];
 
+const page = usePage();
+const modules = computed<string[]>(() => ((page.props as any).permissions?.modules ?? []) as string[]);
+
+const cardLinks = computed(() => {
+    const hasPayments = modules.value.includes('payments');
+
+    return {
+        collections: hasPayments ? '/admin/payments' : undefined,
+        students: modules.value.includes('students') ? '/admin/students' : undefined,
+        officers: modules.value.includes('officers') ? '/admin/officers' : undefined,
+        pending: hasPayments ? '/admin/payments?tab=pending' : undefined,
+    };
+});
+
 const selectedTerm = ref<number | null>(props.selected_term);
 watch(
     () => props.selected_term,
@@ -106,8 +120,7 @@ const selectedTermName = computed(() => selectedTermOption.value?.name ?? '');
 const currentTermName = computed(() => props.current_term?.name ?? 'No active academic term');
 
 const pageSubtitle = computed(
-    () =>
-        `Overview of collections, students, and officers ${selectedTermName.value ? `for ${selectedTermName.value}` : ''}.`,
+    () => `Overview of collections, students, and officers ${selectedTermName.value ? `for ${selectedTermName.value}` : ''}.`,
 );
 
 const currentTermRange = computed(() => {
@@ -222,10 +235,22 @@ const statusColors: Record<string, string> = {
 
             <!-- Stat cards -->
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <StatCard label="Total Income" :value="formatPhp(stats.total_income)" :icon="Wallet" tone="success" />
-                <StatCard label="Total Students" :value="stats.total_students" :icon="GraduationCap" tone="primary" />
-                <StatCard label="Officers" :value="stats.total_officers" :icon="ShieldCheck" tone="info" />
-                <StatCard label="Pending Verifications" :value="stats.pending_verifications" :icon="AlertTriangle" tone="warning" />
+                <StatCard
+                    label="Total Collection"
+                    :value="formatPhp(stats.total_income)"
+                    :icon="Wallet"
+                    tone="success"
+                    :href="cardLinks.collections"
+                />
+                <StatCard label="Total Students" :value="stats.total_students" :icon="GraduationCap" tone="primary" :href="cardLinks.students" />
+                <StatCard label="Officers" :value="stats.total_officers" :icon="ShieldCheck" tone="info" :href="cardLinks.officers" />
+                <StatCard
+                    label="Pending Verifications"
+                    :value="stats.pending_verifications"
+                    :icon="AlertTriangle"
+                    tone="warning"
+                    :href="cardLinks.pending"
+                />
             </div>
 
             <!-- Income charts -->

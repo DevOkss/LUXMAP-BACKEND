@@ -7,18 +7,20 @@ use App\Models\EventLog;
 use App\Models\Organization;
 use App\Models\QrConfiguration;
 use App\Models\User;
+use Database\Seeders\InstituteSeeder;
+use Database\Seeders\OrganizationSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
     $this->seed([
-        \Database\Seeders\InstituteSeeder::class,
-        \Database\Seeders\OrganizationSeeder::class,
+        InstituteSeeder::class,
+        OrganizationSeeder::class,
     ]);
 });
 
 function adminEventsUser(string $orgCode, UserRole $role): User
 {
-    $user = User::factory()->create(['student_number' => '2026-' . str_pad((string) random_int(1000, 9999), 4, '0', STR_PAD_LEFT)]);
+    $user = User::factory()->create(['student_number' => '2026-'.str_pad((string) random_int(1000, 9999), 4, '0', STR_PAD_LEFT)]);
     $user->organizations()->attach(Organization::where('code', $orgCode)->firstOrFail()->id, [
         'role' => $role->value,
         'position' => $role->value,
@@ -88,6 +90,19 @@ test('officer cannot create an event in another organization', function () {
         'title' => 'Cross Org',
         'event_date' => now()->format('Y-m-d'),
     ])->assertForbidden();
+});
+
+test('event date cannot be in the past', function () {
+    $isc = Organization::where('code', 'ICS-ISC')->firstOrFail();
+    $officer = adminEventsUser('ICS-ISC', UserRole::ISC_OFFICER);
+
+    $this->actingAs($officer)->post('/admin/events', [
+        'organization_id' => $isc->id,
+        'title' => 'Past Event',
+        'event_date' => now()->subDay()->toDateString(),
+    ])->assertSessionHasErrors('event_date');
+
+    expect(Event::where('title', 'Past Event')->exists())->toBeFalse();
 });
 
 test('officer can manage events of their own organization', function () {
@@ -262,7 +277,7 @@ test('activity log supports date range filtering', function () {
 
     $head = adminEventsUser('ICS-ISC', UserRole::INSTITUTE_HEAD);
 
-    $this->actingAs($head)->get('/admin/activity-logs?from=' . now()->subDay()->format('Y-m-d'))
+    $this->actingAs($head)->get('/admin/activity-logs?from='.now()->subDay()->format('Y-m-d'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('admin/activity-logs/Index')

@@ -1,6 +1,38 @@
 # SOMS — Laravel Admin Portal
 
-## Latest Session (September 14, 2026) — one receipt per batch + preview, payment/shift notifications, term-based scoping, fee edit fix
+## Latest Session (November 13, 2026) — admin student import replaces institution login; forced first-login password change; shift requests removed
+
+> PWA pairing in `PWA-SUMMARY.md` (change-password screen, onboarding/shift removal, `/user` refresh). **Deploy order matters: ship the PWA first.** The new `UserResource` drops `needs_onboarding`; the old live PWA treats a missing flag as `true` and would redirect to an onboarding page whose API was removed. New PWA + old backend is safe.
+
+### Student accounts: admin Excel import (super admin only)
+- **Routes** (`routes/web.php`, inside the `role:super_admin` group): `GET/POST /admin/students/import`, `GET /admin/students/import/template` (`admin.students.import.*`). New **`Admin\StudentImportController`** (`create`/`store`/`template`) + **`App\Services\StudentImportService`**.
+- **Import format**: `.xlsx/.xls/.csv/.txt` up to 10 MB (PhpSpreadsheet). Header aliases cover `student_number` (student no/id), `name`, `email`, `phone`, `year_level`, `sex`, `is_enrolled`, `institute`, `program`; all nine columns are required (missing columns reject the whole file). Institute/program match by code **or** full name, and the program must belong to the institute. Year accepts `1–6` / `1st–6th`; sex `M/F/Male/Female`; enrolled `1/0`, `Yes/No`, `True/False`.
+- **Matching rules**: existing users matched by **student number** (soft-deleted accounts restored) and updated **without touching password or payments**; staff accounts (super admin/officers) are rejected; duplicate student numbers in the file and duplicate emails are rejected; per-row failures don't stop valid rows; only the first 50 errors are returned in the payload.
+- **New accounts** get the temporary password `student` + `must_change_password = true`; an enrollment snapshot is synced to the active academic term (`AcademicTermService::syncEnrollment`). The downloadable template has a **Students** sheet (headers only) and an **Instructions** sheet (rules + example row).
+- **Admin UI**: `resources/js/pages/admin/students/Import.vue` — upload, template download, created/updated/failed/rows result cards, per-row error table; the result is shared as `flash.import_result` (`HandleInertiaRequests`). Sidebar `student_import` module ("Import Students", Upload icon) replaces `shift_requests` in `PermissionRegistry` (super admin only). `Admin\StudentController` search now also matches email.
+
+### Local-only student auth + forced password change
+- **`AuthService::attempt` is now local-only**: exact `student_number` lookup + `Hash::check`; email login removed; super admins rejected ("use the Admin Portal"); `is_enrolled = false` rejected. Registration, institution-API login fallback/sync, `/me/refresh`, onboarding, and stored institution passwords are gone.
+- **Migrations** (`2026_11_13_000001..000004`): add `users.must_change_password` (default false, boolean cast); drop `users.institution_password_enc`; drop `institution_accounts`; drop `shift_requests`.
+- **New `POST /api/change-password`** (`Api\AuthController@changePassword`, `ChangePasswordRequest`: `current_password`, `password` min 8 + `confirmed` + `different:current_password`) → `AuthService::changePassword` clears the flag and returns the refreshed `user`.
+- **New `EnsurePasswordChanged`** middleware (alias `password.changed`) wraps the authenticated API group. While `must_change_password` is true it allows only `api.user`, `api.logout`, `api.password.change`; every other API call returns **403** `{code: "password_change_required"}`.
+- **`UserResource`**: `needs_onboarding` → `must_change_password`; `User::needsOnboarding()` removed. Removed API routes: `POST /api/register`, `POST /api/institution/auth`, `POST /api/me/refresh`, `GET/PATCH /api/onboarding`, `GET/POST /api/shift-requests*`.
+
+### Shift requests removed (admin + API)
+- Deleted web/API controllers, requests, `ShiftRequest` model/factory, admin UI (`admin/shift-requests/Index.vue`), `notifyShiftRequestSubmitted()`/`notifyShiftRequestReviewed()`, and the super-admin sidebar module. `student_import` takes its slot in `PermissionRegistry`.
+
+### Portal polish
+- **`StatCard`** supports an optional `href` (renders an Inertia `Link` + `ArrowUpRight`); dashboard cards now link to Transactions / Students / Officers / Pending Verification, and "Total Income" is labeled **"Total Collection"**.
+- **Event dates** must be **today or later**: `after_or_equal:today` in `EventRequest` + `EventDraftRequest`, plus a `min` date on the admin create/edit inputs. Covered by `AdminEventsTest` and `EventTest` cases.
+- **`NotificationService`** payment/event notification strings restored to proper UTF-8 (`₱`, `—`, `•`) after an encoding regression.
+
+### Tests / build
+- Suite **325 passed (1524 assertions)**; SOMS `npm run build` clean; PWA `npm run build` (vue-tsc + Vite) clean.
+
+### Deploy (Nov 13)
+- PWA `e0bcba8` + SOMS `c10f8bb` are the last live commits before this session; this session ships the import/password/auth refactor. **PWA first, then SOMS.** SOMS deploy uses the normal CI/`deploy/deploy.sh` path (pull → composer → `npm ci && vite build` → `migrate --force` → caches → `php8.3-fpm reload`); migrations **drop `institution_accounts` and `shift_requests`** — irreversible on rollback beyond `migrate:rollback`.
+
+## Previous Session (September 14, 2026) — one receipt per batch + preview, payment/shift notifications, term-based scoping, fee edit fix
 
 > Two CI-deployed pushes, no proxy touch: `c2ea597` (one-receipt-per-batch, preview modal, payment + shift notifications) then `cafc647` (outstanding officers, dashboard term card, term-based officer assignments, fee edit fix). Both went `tests` + `linter` success → `deploy-production` success (pull → composer → `npm ci && vite build` → `migrate` → caches → `php8.3-fpm reload`). Verified live chunks `app-Dzhyhtia.css`/`app-B1O_4Bfu.js`, `luxmap`/`labsync`/`hulagway` + PWA all 200.
 
@@ -385,7 +417,7 @@
 - **Events**: `type` and `latitude/longitude/geofence_radius/max_participants` dropped; these live on `qr_configurations` now.
 
 ## 1. Tech Stack
-- **Backend**: Laravel 12, PHP 8.2
+- **Backend**: Laravel 12, PHP 8.3 (production; composer constraint `^8.2`)
 - **Frontend**: Inertia.js 2.x + Vue 3.5 (Composition API, TypeScript)
 - **UI**: shadcn-vue (Tailwind CSS)
 - **Auth**: Laravel Sanctum (API tokens), `EnsureUserHasRole` middleware
@@ -403,7 +435,7 @@
 | email | varchar unique | Login identifier for admin portal |
 | password | varchar | Hashed (bcrypt) |
 | remember_token | varchar | Laravel "remember me" cookie |
-| institution_password_enc | text | Encrypted institution password for re-auth |
+| must_change_password | boolean default false | **NEW (Nov 13)** — forces the PWA change-password screen; cleared on change |
 | phone | varchar(20) | nullable |
 | year_level | tinyint(1-5) | nullable |
 | sex | varchar(10) | nullable (M/F) |
@@ -416,7 +448,7 @@
 | created_at, updated_at | timestamp | |
 | deleted_at | timestamp | soft deletes |
 
-**Removed columns**: `is_active` (replaced by `is_enrolled`), `institute` (string, replaced by `institute_id` FK), `program` (string, replaced by `program_id` FK)
+**Removed columns**: `is_active` (replaced by `is_enrolled`), `institute` (string, replaced by `institute_id` FK), `program` (string, replaced by `program_id` FK), `institution_password_enc` (Nov 13 — no institution API re-auth anymore)
 
 ### Organizations
 | Column | Type | Purpose |
@@ -471,19 +503,8 @@ SSC (ssc)
 | name | varchar |
 | is_active | boolean |
 
-### Institution Accounts (mock institution API)
-| Column | Type |
-|---|---|
-| id | bigint |
-| stud_id | varchar(20) unique |
-| password | varchar (hashed) |
-| stud_cnum | varchar(20) nullable |
-| stud_fname, stud_lname, stud_mname | varchar |
-| stud_sex | varchar(10) nullable |
-| stud_year | tinyint |
-| is_graduated, is_enrolled | boolean |
-
-Seeded with 100 real BSCS students. All passwords: `12345678`.
+### Institution Accounts (REMOVED Nov 13, 2026)
+`institution_accounts` (mock institution API: `stud_id`, hashed `password`, name/sex/year, `is_graduated`/`is_enrolled`) was dropped by migration `2026_11_13_000003`. Student accounts now come from the admin **Student Import**; there is no institution-login fallback or profile sync. (Historical: seeded with 100 BSCS students, password `12345678`.)
 
 ### Events
 | Column | Type |
@@ -589,7 +610,7 @@ Route::middleware(['auth', 'verified', "role:{$adminRoles}"])->group(...)
 
 | Role | Sidebar Modules |
 |---|---|
-| SUPER_ADMIN | dashboard, heads, users, institutes, notifications, **device_bindings** |
+| SUPER_ADMIN | dashboard, heads, users, institutes, notifications, **device_bindings**, **student_import** |
 | SSC_HEAD | dashboard, advisers, officers, events, calendar, fees, payments, notifications, **device_bindings** |
 | INSTITUTE_HEAD / SRO_HEAD | dashboard, students, officers, events, calendar, fees, payments, notifications, **device_bindings** |
 
@@ -600,28 +621,25 @@ Route::middleware(['auth', 'verified', "role:{$adminRoles}"])->group(...)
 2. `HandleInertiaRequests` resolves permissions via `PermissionRegistry::permissionsFor($user)`
 3. Sidebar renders modules from `permissions.modules`
 
-### Auth Flow (PWA / API)
-1. Login via `student_number` (or email) + password → `AuthService::attempt()`
-2. Checks `users` table first, then falls back to `InstitutionAccountService` (mock API)
-3. First login: creates stub User with `is_enrolled = false` (NOT propagated)
-4. Onboarding: sets `institute_id`, `program_id`, `is_enrolled = true`
-5. Re-login: syncs name/year/sex from institution API
+### Auth Flow (PWA / API) — local-only since Nov 13, 2026
+1. Login via `student_number` + password → `AuthService::attempt()` (exact `student_number` only; email no longer accepted)
+2. `Hash::check` against `users.password`; super admins are rejected here (Admin Portal only); `is_enrolled = false` rejected
+3. Accounts are provisioned by the super admin's **Student Import** (`/admin/students/import`) — new users get the temporary password `student` and `must_change_password = true`
+4. First PWA login with the temp password redirects to the change-password screen; `POST /api/change-password` clears the flag
+5. While the flag is set, `EnsurePasswordChanged` (`password.changed`) only allows `/api/user`, `/api/logout`, `/api/change-password`; other endpoints 403 (`password_change_required`)
 
 ## 4. API Endpoints
 
 ### Auth (api.php)
 ```
-POST   /api/login
+POST   /api/login                 — { student_number, password, device_name? }
 POST   /api/logout
 GET    /api/user
-POST   /api/me/refresh
-GET    /api/onboarding
-PATCH  /api/onboarding
+POST   /api/change-password       — { current_password, password, password_confirmation }
 GET    /api/workspaces
 PUT    /api/workspace/{organization}
-POST   /api/register
-POST   /api/institution/auth
 ```
+> Removed Nov 13: `POST /api/register`, `POST /api/institution/auth`, `POST /api/me/refresh`, `GET/PATCH /api/onboarding`, and all `/api/shift-requests*` routes.
 
 ### Events
 ```
@@ -710,11 +728,11 @@ Old `institute` (varchar, e.g. "ICS") and `program` (varchar, e.g. "BSCS") colum
 ### Organizations → Institute/Program FK (Aug 5)
 `organizations` also gained nullable `institute_id`/`program_id` FKs (unique pair). ISC orgs are tied to an institute, SRO orgs to a program. `AccessScopeService`, `EventService`, and `AttendanceService` resolve a student's ISC/SRO workspaces via these columns instead of name/code matching.
 
-### Stub User Pattern
-When a student first logs in via institution API, only `student_number`, `name`, `password`, and `is_enrolled = false` are stored. Full profile (phone, year_level, sex) is populated on re-login via `syncFromInstitution()`. Institute/program are set during onboarding.
+### Stub User Pattern (REMOVED Nov 13, 2026)
+Historically, first login via the institution API created a stub User (`student_number`, `name`, temp password, `is_enrolled = false`) and onboarding set institute/program. This whole flow was deleted: students are now provisioned by the super admin's Student Import (temp password `student` + forced password change), and login requires an existing, enrolled local user.
 
 ### Passkey/WebAuthn Removal
-`web-auth/webauthn-lib` package removed from the backend. All backend models, controllers, services, migrations, routes for WebAuthn deleted. `webauthn_credential_id` dropped from attendances. **However, the PWA still ships a Biometric Settings page (`profile/Settings.vue` + `services/webauthn.ts`) that calls `/webauthn/*` endpoints — which no longer exist on the backend (all 404). Known mismatch; see PWA-SUMMARY.md.**
+`web-auth/webauthn-lib` package removed from the backend. All backend models, controllers, services, migrations, routes for WebAuthn deleted. `webauthn_credential_id` dropped from attendances. The PWA's old Biometric Settings page (`profile/Settings.vue` + `services/webauthn.ts`) and its route/type were removed on Aug 9, 2026 — no remaining `/webauthn/*` callers.
 
 ### QR Encryption
 QR data is AES-256-CBC encrypted. The key is `config('services.qr_key')` (`QR_ENCRYPTION_KEY` env, 64-hex) falling back to `app.key`. Payload fields: `event_id`, `qr_config_id`, `type`, `event_title`, `event_date`, `time_from`, `time_to`, `valid_time_from`, `valid_time_until`, `venue`, `valid_from`, `valid_until` (UTC ISO8601), `latitude`, `longitude`, `geofence_radius`, `issued_at`.
@@ -734,8 +752,9 @@ QR data is AES-256-CBC encrypted. The key is `config('services.qr_key')` (`QR_EN
 /admin/officers/assign   — Assign officer
 /admin/officers/search   — Search candidates (JSON)
 /admin/institutes        — Institute CRUD (super_admin only)
-/admin/students          — Student list (institute_head, sro_head only)
-/admin/events, /calendar — event views (officers control; heads view-only)
+/admin/students          — Student list (institute_head, sro_head only); search now also matches email
+/admin/students/import   — **NEW (Nov 13)** Student Excel import (super_admin only; template download + result table)
+/admin/events, /calendar — event views (officers control; heads view-only; event dates must be today or later)
 /admin/fees              — Fees **and Penalty** management (Fees/Penalty toggle; per-org penalty amount via POST /admin/fees/penalty; heads control)
 /admin/payments          — payment transactions view (tabs: Transactions / Pending Verification / Outstanding; per_page default 30)
 /admin/payments/{uuid}   — payment batch detail (receipt view + student term history + exemption reason)
@@ -774,7 +793,7 @@ const officerModules = modules.filter(m =>
 
 ## 8. Testing
 - Framework: Pest
-- Test count: 318 tests, 1437 assertions (Aug 22 — face-enrollment min-samples validation added; dead QrCodeService unit test removed with its code; suite also verified green on Ubuntu/PHP 8.3 via CI)
+- Test count: **325 tests, 1524 assertions** (Nov 13 — StudentImportTest + rewrite of LoginFlowTest; newer device-hybrid/trusted-fingerprint cases included; suite green locally on PHP 8.2 and in CI on PHP 8.3)
 - Test files: `Feature/Api/{Auth,LoginFlow,InstitutionAuth,Event,Attendance,Fee,Payment,Penalty,Notification,Organization,Report,Face,Device}Test`, `Feature/Admin/{AdminUsers,AdminHeads,AdminOfficers,AdminAdvisers,AdminInstitutes,DeviceBinding,Payments,Fees,Events}Test`, `Feature/Auth/{OfficerAuthentication,AdminAuthentication,RoleMiddleware,EmailVerification,PasswordConfirmation}Test`, `Feature/Settings/*`, `Unit/Services/{AccessScopeService,AttendanceService,QrCodeService,WorkspaceService,PermissionRegistry}Test`
 - **Caveat**: `phpunit.xml` runs SQLite `:memory:` while `.env` uses MySQL. The attendances migration (`2026_08_02_135628`) only drops the old columns on MySQL — on SQLite the old columns remain, so test writes using `event_id` pass locally but the column doesn't exist in production MySQL.
 
@@ -817,6 +836,16 @@ const officerModules = modules.filter(m =>
 | **2026_08_12_000002** | **Create `device_bindings`** (user_id FK, unique device_fingerprint, device_meta json, bound_at) |
 | **2026_08_12_000003** | **Create `device_transfer_requests`** (from/to fingerprint + status + expires_at) |
 | **2026_08_12_000004** | **Create `device_unbind_audits`** (user_id, fingerprint, reason, unbound_by) |
+| **2026_08_12_000005** | **Add `device_fingerprint` to `personal_access_tokens`** (one active session per device) |
+| **2026_08_12_000006** | **Restore `payment_submissions` FK on `payments`** (abandoned PayMongo cleanup) |
+| **2026_09_12_000001** | **Add `trusted_fingerprints` to `device_bindings`** (same-hardware different-browser binds) |
+| **2026_09_12_000002** | **Change `device_fingerprint` unique → index** (multiple trusted fingerprints per user) |
+| **2026_09_14_000001** | **Add `batch_id` to `receipts`** (one receipt per payment batch, backfilled) |
+| **2026_09_14_000002** | **Add `academic_term_id` to `organization_user`** (term-based officer assignments, unique per term) |
+| **2026_11_13_000001** | **Add `users.must_change_password`** (forced first-login password change) |
+| **2026_11_13_000002** | **Drop `users.institution_password_enc`** (institution API re-auth removed) |
+| **2026_11_13_000003** | **Drop `institution_accounts`** (students provisioned via Student Import) |
+| **2026_11_13_000004** | **Drop `shift_requests`** (feature removed) |
 
 **Deleted migrations**: `_create_enrollments_table`, `_create_webauthn_credentials_table`, `_add_credential_public_key_to_webauthn_credentials`
 

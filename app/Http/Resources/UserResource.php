@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\AcademicTermService;
 use App\Support\PermissionRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -10,7 +11,7 @@ class UserResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $term = app(\App\Services\AcademicTermService::class)->current();
+        $term = app(AcademicTermService::class)->current();
 
         return [
             'id' => $this->id,
@@ -26,7 +27,7 @@ class UserResource extends JsonResource
             'academic_term' => $term?->displayName(),
             'is_enrolled' => $this->is_enrolled,
             'role' => app(PermissionRegistry::class)->resolveRoleFor($this->resource)->value,
-            'needs_onboarding' => $this->needsOnboarding(),
+            'must_change_password' => $this->must_change_password,
             'email_verified_at' => $this->email_verified_at,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

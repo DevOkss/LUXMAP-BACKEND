@@ -20,7 +20,7 @@ class EventDraftRequest extends FormRequest
             'venue' => ['nullable', 'string', 'max:255'],
             'time_from' => ['nullable', 'date_format:H:i'],
             'time_to' => ['nullable', 'date_format:H:i', 'after:time_from'],
-            'event_date' => ['required', 'date'],
+            'event_date' => ['required', 'date', 'after_or_equal:today'],
         ];
     }
 }
