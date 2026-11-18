@@ -61,6 +61,8 @@ Route::middleware(['auth', 'verified', "role:{$adminRoles}"])->name('admin.')->p
             ->name('students.import.create');
         Route::post('/students/import', [StudentImportController::class, 'store'])
             ->name('students.import.store');
+        Route::post('/students/import/stream', [StudentImportController::class, 'stream'])
+            ->name('students.import.stream');
         Route::get('/students/import/template', [StudentImportController::class, 'template'])
             ->name('students.import.template');
     });

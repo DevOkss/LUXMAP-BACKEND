@@ -24,6 +24,11 @@ interface ImportResult {
     term: string | null;
 }
 
+type ImportStreamEvent =
+    | { type: 'progress'; processed: number; total: number; percent: number }
+    | ({ type: 'result' } & ImportResult)
+    | { type: 'error'; message: string };
+
 defineProps<{
     templateUrl: string;
     currentTerm: string | null;
@@ -36,15 +41,23 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const page = usePage();
-const result = computed<ImportResult | null>(() => {
+const flashResult = computed<ImportResult | null>(() => {
     return (page.props as any).flash?.import_result ?? null;
 });
+
+const localResult = ref<ImportResult | null>(null);
+const result = computed<ImportResult | null>(() => localResult.value ?? flashResult.value);
 
 const form = useForm({
     file: null as File | null,
 });
 
 const fileName = ref('');
+const importing = ref(false);
+const importError = ref('');
+const progress = ref(0);
+const processedRows = ref(0);
+const totalRows = ref(0);
 
 const columns = ['student_number', 'name', 'email', 'phone', 'year_level', 'sex', 'is_enrolled', 'institute', 'program'];
 
@@ -55,15 +68,95 @@ function onFileChange(event: Event) {
     fileName.value = file?.name ?? '';
 }
 
-function submit() {
-    form.post('/admin/students/import', {
-        forceFormData: true,
-        preserveScroll: true,
-        onSuccess: () => {
-            form.reset('file');
-            fileName.value = '';
-        },
-    });
+function csrfToken(): string {
+    return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+}
+
+async function submit() {
+    const file = form.file;
+
+    if (!file || importing.value) {
+        return;
+    }
+
+    importing.value = true;
+    importError.value = '';
+    progress.value = 0;
+    processedRows.value = 0;
+    totalRows.value = 0;
+    localResult.value = null;
+
+    const data = new FormData();
+    data.append('file', file);
+
+    try {
+        const response = await fetch('/admin/students/import/stream', {
+            method: 'POST',
+            headers: {
+                Accept: 'application/x-ndjson',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrfToken(),
+            },
+            body: data,
+            credentials: 'same-origin',
+        });
+
+        if (!response.ok || !response.body) {
+            const payload = await response.json().catch(() => null);
+            throw new Error(payload?.errors?.file?.[0] ?? payload?.message ?? `Import failed (HTTP ${response.status}).`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        const handleLine = (line: string) => {
+            const payload = JSON.parse(line) as ImportStreamEvent;
+
+            if (payload.type === 'progress') {
+                processedRows.value = payload.processed;
+                totalRows.value = payload.total;
+                progress.value = payload.percent;
+            } else if (payload.type === 'result') {
+                localResult.value = payload;
+                progress.value = 100;
+                form.reset('file');
+                fileName.value = '';
+            } else if (payload.type === 'error') {
+                importError.value = payload.message;
+            }
+        };
+
+        while (true) {
+            const { value, done } = await reader.read();
+
+            if (done) {
+                break;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+
+            let newline: number;
+            while ((newline = buffer.indexOf('\n')) !== -1) {
+                const line = buffer.slice(0, newline).trim();
+                buffer = buffer.slice(newline + 1);
+
+                if (line) {
+                    handleLine(line);
+                }
+            }
+        }
+
+        buffer += decoder.decode();
+
+        if (buffer.trim()) {
+            handleLine(buffer.trim());
+        }
+    } catch (error) {
+        importError.value = error instanceof Error ? error.message : 'Import failed. Please try again.';
+    } finally {
+        importing.value = false;
+    }
 }
 </script>
 
@@ -96,8 +189,8 @@ function submit() {
                         </div>
 
                         <div class="flex flex-wrap items-center gap-3">
-                            <Button type="button" :disabled="form.processing || !form.file" @click="submit">
-                                {{ form.processing ? 'Importing...' : 'Import Students' }}
+                            <Button type="button" :disabled="importing || !form.file" @click="submit">
+                                {{ importing ? 'Importing...' : 'Import Students' }}
                             </Button>
                             <a :href="templateUrl" class="text-sm font-medium text-primary underline-offset-4 hover:underline"> Download template </a>
                         </div>
@@ -200,6 +293,63 @@ function submit() {
                     </div>
                 </CardContent>
             </Card>
+        </div>
+
+        <div
+            v-if="importing || importError"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="import-progress-title"
+        >
+            <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                <div class="flex items-center gap-3">
+                    <span
+                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+                        :class="importError ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'"
+                    >
+                        <svg v-if="!importError" class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                            <path
+                                class="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4Zm2 5.291A7.962 7.962 0 0 1 4 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647Z"
+                            />
+                        </svg>
+                        <svg v-else class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+                            />
+                        </svg>
+                    </span>
+                    <div class="min-w-0">
+                        <p id="import-progress-title" class="text-base font-semibold text-gray-900">
+                            {{ importError ? 'Import failed' : 'Importing students' }}
+                        </p>
+                        <p class="truncate text-xs text-gray-500">{{ fileName || 'Your spreadsheet' }}</p>
+                    </div>
+                </div>
+
+                <template v-if="!importError">
+                    <div class="mt-5 h-2.5 w-full overflow-hidden rounded-full bg-gray-200">
+                        <div class="h-full rounded-full bg-emerald-500 transition-all duration-300" :style="{ width: `${progress}%` }" />
+                    </div>
+                    <div class="mt-2 flex items-center justify-between text-xs text-gray-600">
+                        <span>{{ totalRows > 0 ? `${processedRows} of ${totalRows} rows` : 'Reading spreadsheet...' }}</span>
+                        <span class="font-semibold text-gray-900">{{ totalRows > 0 ? `${progress}%` : '' }}</span>
+                    </div>
+                    <p class="mt-4 text-xs text-gray-500">Keep this tab open until the import finishes.</p>
+                </template>
+
+                <template v-else>
+                    <p class="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{ importError }}</p>
+                    <div class="mt-4 flex justify-end">
+                        <Button type="button" @click="importError = ''">Close</Button>
+                    </div>
+                </template>
+            </div>
         </div>
     </AppLayout>
 </template>

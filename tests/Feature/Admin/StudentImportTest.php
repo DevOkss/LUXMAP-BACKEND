@@ -161,6 +161,32 @@ test('super admin imports a new student with a temporary password and enrollment
     expect($enrollment->is_enrolled)->toBeTrue();
 });
 
+test('super admin can stream import progress and result events', function () {
+    $admin = studentImportAdmin();
+
+    $response = $this->actingAs($admin)->post('/admin/students/import/stream', [
+        'file' => studentImportFile([
+            ['2026-00003', 'Nina Reyes', 'nina@example.com', '', 1, 'F', 1, 'ICS', 'BSCS'],
+            ['2026-00004', 'Paolo Cruz', 'paolo@example.com', '', 2, 'M', 1, 'ICS', 'BSCS'],
+        ]),
+    ]);
+
+    $response->assertOk();
+    $response->assertHeader('Content-Type', 'application/x-ndjson; charset=UTF-8');
+
+    $content = $response->streamedContent();
+    $events = collect(explode("\n", trim($content)))
+        ->filter()
+        ->map(fn (string $line) => json_decode($line, true));
+
+    expect($events->first()['type'])->toBe('progress');
+    expect($events->last()['type'])->toBe('result');
+    expect($events->last()['created'])->toBe(2);
+    expect($events->last()['failed'])->toBe(0);
+    expect(User::where('student_number', '2026-00003')->exists())->toBeTrue();
+    expect(User::where('student_number', '2026-00004')->exists())->toBeTrue();
+});
+
 test('import resolves institute and program by their full names', function () {
     $admin = studentImportAdmin();
 

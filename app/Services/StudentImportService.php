@@ -45,7 +45,7 @@ class StudentImportService
      *
      * @return array{created: int, updated: int, failed: int, rows: int, errors: array, term: ?string}
      */
-    public function import(string $path): array
+    public function import(string $path, ?callable $onProgress = null): array
     {
         try {
             $spreadsheet = IOFactory::load($path);
@@ -58,6 +58,7 @@ class StudentImportService
         $sheet = $spreadsheet->getActiveSheet();
         $highestRow = $sheet->getHighestDataRow();
         $highestColumn = $sheet->getHighestDataColumn();
+        $totalRows = max(1, $highestRow - 1);
 
         $headerMap = $this->resolveHeaderMap(
             $sheet->rangeToArray('A1:'.$highestColumn.'1', null, true, true)[0] ?? []
@@ -92,6 +93,11 @@ class StudentImportService
             }
 
             $processed++;
+
+            if ($onProgress) {
+                $onProgress($processed, $totalRows);
+            }
+
             $studentNumber = $values['student_number'];
 
             if ($studentNumber === '') {
